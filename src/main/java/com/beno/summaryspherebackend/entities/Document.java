@@ -21,13 +21,17 @@ public class Document {
     private String id;
     private String originalFilename;
     private Long size;
+    private String fileType;
+    private String status;
     private String uploadedAt;
     //private String uploadedBy;
 
-    public Document(String id, String originalFilename, Long size) {
+    public Document(String id, String originalFilename, Long size, String fileType) {
         this.id = id;
         this.originalFilename = originalFilename;
         this.size = size;
         this.uploadedAt = LocalDateTime.now().toString();
+        this.fileType = fileType;
+        this.status = "UPLOADED";
     }
 }

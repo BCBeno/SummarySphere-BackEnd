@@ -1,5 +1,8 @@
 package com.beno.summaryspherebackend.services;
 
+import com.beno.summaryspherebackend.ModelMappers.ConvertToDto;
+import com.beno.summaryspherebackend.dtos.DocumentDTO;
+import com.beno.summaryspherebackend.dtos.DocumentListDTO;
 import com.beno.summaryspherebackend.entities.Document;
 import com.beno.summaryspherebackend.repositories.DocumentRepository;
 import org.springframework.core.io.Resource;
@@ -22,9 +25,11 @@ public class DocumentService {
     private final Path fileStorageLocation;
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(".pdf", ".docx", ".txt");
     DocumentRepository documentRepository;
+    ConvertToDto convertToDto;
 
-    public DocumentService(DocumentRepository documentRepository) {
+    public DocumentService(DocumentRepository documentRepository, ConvertToDto convertToDto) {
         this.documentRepository = documentRepository;
+        this.convertToDto = convertToDto;
         this.fileStorageLocation = Paths.get("uploads").toAbsolutePath().normalize();
         try {
             Files.createDirectories(this.fileStorageLocation);
@@ -33,7 +38,7 @@ public class DocumentService {
         }
     }
 
-    public void storeFile(MultipartFile file) throws IOException {
+    public String storeFile(MultipartFile file) throws IOException {
         String originalFileName = Objects.requireNonNull(file.getOriginalFilename());
         String fileExtension = "";
         if(file.getSize() > 25 * 1024 * 1024) {
@@ -55,19 +60,21 @@ public class DocumentService {
             throw new IllegalArgumentException("Filename contains invalid path sequence " + uniqueFileName);
         }
 
-        documentRepository.save(new Document(uniqueFileName, originalFileName, file.getSize()));
+        documentRepository.save(new Document(uniqueFileName, originalFileName, file.getSize(), fileExtension));
         Path targetLocation = this.fileStorageLocation.resolve(uniqueFileName);
         Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
+        return uniqueFileName;
     }
 
     public Optional<Document> getDocumentById(String id) {
         return documentRepository.findById(id);
     }
 
-    public List<Document> listFiles()
-    {
+    public List<DocumentListDTO> listFiles() {
         List<Document> documents = documentRepository.findAll();
-        return documents;
+        List<DocumentListDTO> documentDTOs = new ArrayList<>();
+        documents.forEach(doc -> documentDTOs.add(convertToDto.convertDocumentListToDto(doc)));
+        return documentDTOs;
     }
 
     public void deleteFile(String id) throws IOException {

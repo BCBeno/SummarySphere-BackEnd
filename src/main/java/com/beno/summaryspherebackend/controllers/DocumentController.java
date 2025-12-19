@@ -1,6 +1,7 @@
 // src/main/java/com/beno/summaryspherebackend/controllers/DocumentController.java
 package com.beno.summaryspherebackend.controllers;
 
+import com.beno.summaryspherebackend.ModelMappers.ConvertToDto;
 import com.beno.summaryspherebackend.entities.Document;
 import com.beno.summaryspherebackend.services.DocumentService;
 import org.slf4j.Logger;
@@ -24,17 +25,22 @@ public class DocumentController {
 
     private static final Logger log = LoggerFactory.getLogger(DocumentController.class);
     private final DocumentService documentService;
+    private final ConvertToDto convertToDto;
 
-    public DocumentController(DocumentService documentService) {
+    public DocumentController(DocumentService documentService, ConvertToDto convertToDto) {
         this.documentService = documentService;
+        this.convertToDto = convertToDto;
     }
 
     @PostMapping(path = "", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<String> uploadFile(@RequestParam("file") MultipartFile file) {
         String originalFileName = Objects.requireNonNull(file.getOriginalFilename());
         try {
-             documentService.storeFile(file);
-            return ResponseEntity.ok("File uploaded successfully: " + originalFileName);
+             String id = documentService.storeFile(file);
+             HashMap<String, String> message = new HashMap<>();
+             message.put("message", "Document uploaded successfully");
+             message.put("id", id);
+            return ResponseEntity.ok(message.toString());
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.badRequest().body("There was an error uploading the file: " + ex.getMessage());
         } catch (IOException ex) {
@@ -54,29 +60,7 @@ public class DocumentController {
             return ResponseEntity.notFound().build();
         }
 
-        Document doc = docOpt.get();
-
-        boolean available;
-        try {
-            Resource res = documentService.loadFileAsResource(id);
-            available = res.exists() && res.isReadable();
-        } catch (IllegalArgumentException ex) {
-            available = false;
-        }
-
-        Map<String, Object> meta = new HashMap<>();
-        meta.put("id", doc.getId());
-        meta.put("originalFileName", doc.getOriginalFilename());
-        meta.put("size", doc.getSize());
-        meta.put("status", available ? "AVAILABLE" : "MISSING");
-        String downloadUrl = ServletUriComponentsBuilder.fromCurrentContextPath()
-                .path("/api/documents/")
-                .path(id)
-                .path("/file")
-                .toUriString();
-        meta.put("downloadUrl", downloadUrl);
-
-        return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(meta);
+        return ResponseEntity.ok(convertToDto.convertDocumentToDto(docOpt.get()));
     }
 
 
