@@ -1,9 +1,10 @@
-// src/main/java/com/beno/summaryspherebackend/controllers/DocumentController.java
 package com.beno.summaryspherebackend.controllers;
 
 import com.beno.summaryspherebackend.ModelMappers.ConvertToDto;
+import com.beno.summaryspherebackend.dtos.SummarizationSchema;
 import com.beno.summaryspherebackend.entities.Document;
 import com.beno.summaryspherebackend.services.DocumentService;
+import com.beno.summaryspherebackend.services.GeminiService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
@@ -11,11 +12,9 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.IOException;
 import java.util.HashMap;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -26,8 +25,11 @@ public class DocumentController {
     private static final Logger log = LoggerFactory.getLogger(DocumentController.class);
     private final DocumentService documentService;
     private final ConvertToDto convertToDto;
+    private SummarizationSchema summarizationRecord;
+    private GeminiService geminiService;
 
-    public DocumentController(DocumentService documentService, ConvertToDto convertToDto) {
+    public DocumentController(DocumentService documentService, ConvertToDto convertToDto, GeminiService geminiService) {
+        this.geminiService = geminiService;
         this.documentService = documentService;
         this.convertToDto = convertToDto;
     }
@@ -86,6 +88,17 @@ public class DocumentController {
                     .body(resource);
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.badRequest().body("There was an error downloading the file: " + ex.getMessage());
+        }
+    }
+
+    @PostMapping("/{id}/summarize")
+    public ResponseEntity<?> summarizeDocument(@PathVariable String id, @RequestBody SummarizationSchema.SummarizeRequest summarizeRequest) {
+        try {
+            String summary = geminiService.summarizeAsync(id, summarizeRequest.summaryType());
+            SummarizationSchema.SummarizeResponse response = new SummarizationSchema.SummarizeResponse(summary, id);
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body("There was an error summarizing the document: " + ex.getMessage());
         }
     }
 

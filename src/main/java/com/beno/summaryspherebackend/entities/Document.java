@@ -1,5 +1,6 @@
 package com.beno.summaryspherebackend.entities;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
@@ -15,23 +16,25 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @NoArgsConstructor
-@AllArgsConstructor
 public class Document {
     @Id
-    private String id;
+    private String documentId;
     private String originalFilename;
     private Long size;
     private String fileType;
     private String status;
-    private String uploadedAt;
+    private LocalDateTime uploadedAt;
+    @Column(columnDefinition = "TEXT")
+    private String content;
     //private String uploadedBy;
 
-    public Document(String id, String originalFilename, Long size, String fileType) {
-        this.id = id;
+    public Document(String documentId, String originalFilename, Long size, String fileType, String content) {
+        this.documentId = documentId;
         this.originalFilename = originalFilename;
         this.size = size;
-        this.uploadedAt = LocalDateTime.now().toString();
+        this.uploadedAt = LocalDateTime.now();
         this.fileType = fileType;
+        this.content = content;
         this.status = "UPLOADED";
     }
 }

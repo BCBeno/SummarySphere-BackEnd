@@ -17,7 +17,7 @@ public class ConvertToDto {
 
     public DocumentListDTO convertDocumentListToDto(Document doc) {
         DocumentListDTO dto = new DocumentListDTO();
-        dto.setId(doc.getId());
+        dto.setId(doc.getDocumentId());
         dto.setFileName(doc.getOriginalFilename());
         dto.setFileType(doc.getFileType());
         dto.setStatus(doc.getStatus());

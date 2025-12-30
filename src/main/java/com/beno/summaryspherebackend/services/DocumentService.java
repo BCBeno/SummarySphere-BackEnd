@@ -26,8 +26,10 @@ public class DocumentService {
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(".pdf", ".docx", ".txt");
     DocumentRepository documentRepository;
     ConvertToDto convertToDto;
+    FileExtractionService fileExtractionService;
 
-    public DocumentService(DocumentRepository documentRepository, ConvertToDto convertToDto) {
+    public DocumentService(DocumentRepository documentRepository, ConvertToDto convertToDto, FileExtractionService fileExtractionService) {
+        this.fileExtractionService = fileExtractionService;
         this.documentRepository = documentRepository;
         this.convertToDto = convertToDto;
         this.fileStorageLocation = Paths.get("uploads").toAbsolutePath().normalize();
@@ -39,6 +41,7 @@ public class DocumentService {
     }
 
     public String storeFile(MultipartFile file) throws IOException {
+        byte[] bytes = file.getBytes();
         String originalFileName = Objects.requireNonNull(file.getOriginalFilename());
         String fileExtension = "";
         if(file.getSize() > 25 * 1024 * 1024) {
@@ -56,13 +59,20 @@ public class DocumentService {
         }
         String uniqueFileName = UUID.randomUUID() + fileExtension;
 
-        if (uniqueFileName.contains("..")) {
-            throw new IllegalArgumentException("Filename contains invalid path sequence " + uniqueFileName);
+        if (originalFileName.contains("..")) {
+            throw new IllegalArgumentException("Filename contains invalid path sequence " + originalFileName);
         }
 
-        documentRepository.save(new Document(uniqueFileName, originalFileName, file.getSize(), fileExtension));
+        String content;
+        try {
+            content = fileExtractionService.extractTextFromBytes(bytes);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Extraction failed: " + e.getMessage());
+        }
+
         Path targetLocation = this.fileStorageLocation.resolve(uniqueFileName);
-        Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
+        Files.write(targetLocation, bytes);
+        documentRepository.save(new Document(uniqueFileName, originalFileName, (long)bytes.length, fileExtension, content));
         return uniqueFileName;
     }
 
