@@ -35,10 +35,14 @@ public class DocumentController {
     }
 
     @PostMapping(path = "", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<String> uploadFile(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<String> uploadFile(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "title", required = false) String title
+    ) {
         String originalFileName = Objects.requireNonNull(file.getOriginalFilename());
         try {
-             String id = documentService.storeFile(file);
+             String id = documentService.storeFile(file, title);
+             
              HashMap<String, String> message = new HashMap<>();
              message.put("message", "Document uploaded successfully");
              message.put("id", id);
@@ -101,6 +105,4 @@ public class DocumentController {
             return ResponseEntity.badRequest().body("There was an error summarizing the document: " + ex.getMessage());
         }
     }
-
 }
-

@@ -18,9 +18,11 @@ public class ConvertToDto {
     public DocumentListDTO convertDocumentListToDto(Document doc) {
         DocumentListDTO dto = new DocumentListDTO();
         dto.setId(doc.getDocumentId());
+        dto.setTitle(doc.getTitle());
         dto.setFileName(doc.getOriginalFilename());
         dto.setFileType(doc.getFileType());
         dto.setStatus(doc.getStatus());
+        dto.setUploadedAt(doc.getUploadedAt() != null ? doc.getUploadedAt().toString() : null); 
         return dto;
     }
 

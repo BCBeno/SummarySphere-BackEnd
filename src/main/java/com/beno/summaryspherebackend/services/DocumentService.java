@@ -40,9 +40,12 @@ public class DocumentService {
         }
     }
 
-    public String storeFile(MultipartFile file) throws IOException {
+    public String storeFile(MultipartFile file, String title) throws IOException {
         byte[] bytes = file.getBytes();
         String originalFileName = Objects.requireNonNull(file.getOriginalFilename());
+        
+        String docTitle = (title != null && !title.trim().isEmpty()) ? title : originalFileName;
+
         String fileExtension = "";
         if(file.getSize() > 25 * 1024 * 1024) {
             throw new IllegalArgumentException("File size exceeds the maximum limit of 25MB");
@@ -72,7 +75,8 @@ public class DocumentService {
 
         Path targetLocation = this.fileStorageLocation.resolve(uniqueFileName);
         Files.write(targetLocation, bytes);
-        documentRepository.save(new Document(uniqueFileName, originalFileName, (long)bytes.length, fileExtension, content));
+        
+        documentRepository.save(new Document(uniqueFileName, docTitle, originalFileName, (long)bytes.length, fileExtension, content));
         return uniqueFileName;
     }
 
@@ -110,8 +114,4 @@ public class DocumentService {
             throw new IllegalArgumentException("File not found: " + id, ex);
         }
     }
-
 }
-
-
-

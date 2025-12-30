@@ -19,17 +19,20 @@ import java.time.LocalDateTime;
 public class Document {
     @Id
     private String documentId;
+    private String title;
     private String originalFilename;
     private Long size;
     private String fileType;
     private String status;
     private LocalDateTime uploadedAt;
+    
     @Column(columnDefinition = "TEXT")
     private String content;
     //private String uploadedBy;
 
-    public Document(String documentId, String originalFilename, Long size, String fileType, String content) {
+    public Document(String documentId, String title, String originalFilename, Long size, String fileType, String content) {
         this.documentId = documentId;
+        this.title = title;
         this.originalFilename = originalFilename;
         this.size = size;
         this.uploadedAt = LocalDateTime.now();
