@@ -27,6 +27,10 @@ public class ConvertToDto {
     }
 
     public DocumentDTO convertDocumentToDto(Document doc) {
-        return modelMapper.map(doc, DocumentDTO.class);
+        // Use manual mapping or ensure ModelMapper handles the new field
+        DocumentDTO dto = modelMapper.map(doc, DocumentDTO.class);
+        dto.setTitle(doc.getTitle()); // <--- Explicitly set the title
+        dto.setFileName(doc.getOriginalFilename()); // Ensure filename is mapped from originalFilename
+        return dto;
     }
 }
