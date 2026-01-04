@@ -43,6 +43,7 @@ public class GeminiService {
         String prompt = """
             You are a professional editor. 
             Summarize the following text in a {type} style.
+            Do not use MARKUP languages or special characters.
             
             TEXT TO SUMMARIZE:
             {text}

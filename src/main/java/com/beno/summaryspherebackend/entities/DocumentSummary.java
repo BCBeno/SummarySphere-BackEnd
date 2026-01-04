@@ -22,7 +22,7 @@ public class DocumentSummary {
     @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "document_id")
     private Document document;
 

@@ -1,15 +1,14 @@
 package com.beno.summaryspherebackend.entities;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "documents")
@@ -25,7 +24,20 @@ public class Document {
     private String fileType;
     private String status;
     private LocalDateTime uploadedAt;
-    
+
+    @OneToMany(mappedBy = "document", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<DocumentSummary> summaries = new ArrayList<>();
+
+    public void addSummary(DocumentSummary summary) {
+        summaries.add(summary);
+        summary.setDocument(this);
+    }
+
+    public void removeSummary(DocumentSummary summary) {
+        summaries.remove(summary);
+        summary.setDocument(null);
+    }
+
     @Column(columnDefinition = "TEXT")
     private String content;
     //private String uploadedBy;
