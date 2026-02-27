@@ -46,6 +46,7 @@ public class GeminiServiceImpl implements GeminiService {
             You are a professional editor. 
             Summarize the following text in a {type} style.
             Do not use MARKUP languages or special characters.
+            Use the language of he document.
             
             TEXT TO SUMMARIZE:
             {text}

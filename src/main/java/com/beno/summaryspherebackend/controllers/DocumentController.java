@@ -3,13 +3,16 @@ package com.beno.summaryspherebackend.controllers;
 import com.beno.summaryspherebackend.ModelMappers.ConvertToDto;
 import com.beno.summaryspherebackend.dtos.SummarizationSchema;
 import com.beno.summaryspherebackend.entities.Document;
+import com.beno.summaryspherebackend.entities.DocumentSummary;
 import com.beno.summaryspherebackend.services.DocumentService;
+import com.beno.summaryspherebackend.services.DocumentSummaryService;
 import com.beno.summaryspherebackend.services.GeminiService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -27,13 +30,16 @@ public class DocumentController {
     private final ConvertToDto convertToDto;
     private SummarizationSchema summarizationRecord;
     private GeminiService geminiService;
+    private final DocumentSummaryService documentSummaryService;
 
-    public DocumentController(DocumentService documentService, ConvertToDto convertToDto, GeminiService geminiService) {
+    public DocumentController(DocumentService documentService, ConvertToDto convertToDto, GeminiService geminiService, DocumentSummaryService documentSummaryService) {
         this.geminiService = geminiService;
         this.documentService = documentService;
         this.convertToDto = convertToDto;
+        this.documentSummaryService = documentSummaryService;
     }
 
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     @PostMapping(path = "", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<String> uploadFile(
             @RequestParam("file") MultipartFile file,
@@ -54,11 +60,13 @@ public class DocumentController {
         }
     }
 
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     @GetMapping("")
     public ResponseEntity<?> listFiles() {
         return ResponseEntity.ok(documentService.listFiles());
     }
 
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     @GetMapping("/{id}")
     public ResponseEntity<?> getDocumentMetadata(@PathVariable String id) {
         Optional<Document> docOpt = documentService.getDocumentById(id);
@@ -70,6 +78,7 @@ public class DocumentController {
     }
 
 
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public ResponseEntity<String> deleteFile(@PathVariable String id) {
         try {
@@ -104,5 +113,22 @@ public class DocumentController {
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.badRequest().body("There was an error summarizing the document: " + ex.getMessage());
         }
+    }
+
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    @GetMapping("/{id}/summary")
+    public ResponseEntity<?> getLatestSummary(@PathVariable String id) {
+        Optional<DocumentSummary> summaryOpt = documentSummaryService.getLatestSummaryForDocument(id);
+        if (summaryOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        DocumentSummary summary = summaryOpt.get();
+        HashMap<String, Object> resp = new HashMap<>();
+        resp.put("documentId", id);
+        resp.put("summaryType", summary.getSummaryType());
+        resp.put("summaryText", summary.getSummaryText());
+        resp.put("status", summary.getStatus());
+        resp.put("createdAt", summary.getCreatedAt());
+        return ResponseEntity.ok(resp);
     }
 }
