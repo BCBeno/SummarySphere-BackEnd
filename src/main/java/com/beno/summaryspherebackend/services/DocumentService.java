@@ -2,6 +2,7 @@ package com.beno.summaryspherebackend.services;
 
 import com.beno.summaryspherebackend.dtos.DocumentListDTO;
 import com.beno.summaryspherebackend.entities.Document;
+import com.beno.summaryspherebackend.entities.User;
 import org.springframework.core.io.Resource;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -10,9 +11,10 @@ import java.util.List;
 import java.util.Optional;
 
 public interface DocumentService {
-    String storeFile(MultipartFile file, String title) throws IOException;
+    String storeFile(MultipartFile file, String title, User uploader) throws IOException;
     Optional<Document> getDocumentById(String id);
     List<DocumentListDTO> listFiles();
+    List<DocumentListDTO> listFilesByUser(User user);
     void deleteFile(String id) throws IOException;
     Resource loadFileAsResource(String id);
 }

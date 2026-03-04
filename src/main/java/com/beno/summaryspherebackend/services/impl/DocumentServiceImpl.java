@@ -3,6 +3,7 @@ package com.beno.summaryspherebackend.services.impl;
 import com.beno.summaryspherebackend.ModelMappers.ConvertToDto;
 import com.beno.summaryspherebackend.dtos.DocumentListDTO;
 import com.beno.summaryspherebackend.entities.Document;
+import com.beno.summaryspherebackend.entities.User;
 import com.beno.summaryspherebackend.repositories.DocumentRepository;
 import com.beno.summaryspherebackend.services.DocumentService;
 import com.beno.summaryspherebackend.services.FileExtractionService;
@@ -40,7 +41,7 @@ public class DocumentServiceImpl implements DocumentService {
     }
 
     @Override
-    public String storeFile(MultipartFile file, String title) throws IOException {
+    public String storeFile(MultipartFile file, String title, User uploader) throws IOException {
         byte[] bytes = file.getBytes();
         String originalFileName = Objects.requireNonNull(file.getOriginalFilename());
 
@@ -76,7 +77,7 @@ public class DocumentServiceImpl implements DocumentService {
         Path targetLocation = this.fileStorageLocation.resolve(uniqueFileName);
         Files.write(targetLocation, bytes);
 
-        documentRepository.save(new Document(uniqueFileName, docTitle, originalFileName, (long)bytes.length, fileExtension, content));
+        documentRepository.save(new Document(uniqueFileName, docTitle, originalFileName, (long)bytes.length, fileExtension, content, uploader));
         return uniqueFileName;
     }
 
@@ -88,6 +89,14 @@ public class DocumentServiceImpl implements DocumentService {
     @Override
     public List<DocumentListDTO> listFiles() {
         List<Document> documents = documentRepository.findAll();
+        List<DocumentListDTO> documentDTOs = new ArrayList<>();
+        documents.forEach(doc -> documentDTOs.add(convertToDto.convertDocumentListToDto(doc)));
+        return documentDTOs;
+    }
+
+    @Override
+    public List<DocumentListDTO> listFilesByUser(User user) {
+        List<Document> documents = documentRepository.findByUploadedBy(user);
         List<DocumentListDTO> documentDTOs = new ArrayList<>();
         documents.forEach(doc -> documentDTOs.add(convertToDto.convertDocumentListToDto(doc)));
         return documentDTOs;

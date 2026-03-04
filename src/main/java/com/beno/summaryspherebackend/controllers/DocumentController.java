@@ -4,6 +4,7 @@ import com.beno.summaryspherebackend.ModelMappers.ConvertToDto;
 import com.beno.summaryspherebackend.dtos.SummarizationSchema;
 import com.beno.summaryspherebackend.entities.Document;
 import com.beno.summaryspherebackend.entities.DocumentSummary;
+import com.beno.summaryspherebackend.entities.User;
 import com.beno.summaryspherebackend.services.DocumentService;
 import com.beno.summaryspherebackend.services.DocumentSummaryService;
 import com.beno.summaryspherebackend.services.GeminiService;
@@ -13,6 +14,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -43,12 +45,13 @@ public class DocumentController {
     @PostMapping(path = "", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<String> uploadFile(
             @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "title", required = false) String title
+            @RequestParam(value = "title", required = false) String title,
+            @AuthenticationPrincipal User currentUser
     ) {
         String originalFileName = Objects.requireNonNull(file.getOriginalFilename());
         try {
-             String id = documentService.storeFile(file, title);
-             
+             String id = documentService.storeFile(file, title, currentUser);
+
              HashMap<String, String> message = new HashMap<>();
              message.put("message", "Document uploaded successfully");
              message.put("id", id);
@@ -60,7 +63,7 @@ public class DocumentController {
         }
     }
 
-    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    @PreAuthorize("hasRole( 'ADMIN')")
     @GetMapping("")
     public ResponseEntity<?> listFiles() {
         return ResponseEntity.ok(documentService.listFiles());
@@ -68,19 +71,31 @@ public class DocumentController {
 
     @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     @GetMapping("/{id}")
-    public ResponseEntity<?> getDocumentMetadata(@PathVariable String id) {
+    public ResponseEntity<?> getDocumentMetadata(@PathVariable String id, @AuthenticationPrincipal User currentUser) {
         Optional<Document> docOpt = documentService.getDocumentById(id);
         if (docOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
+        Document doc = docOpt.get();
+        if (!isOwner(doc, currentUser)) {
+            return ResponseEntity.status(403).body("You are not authorized to access this document's metadata.");
+        }
 
-        return ResponseEntity.ok(convertToDto.convertDocumentToDto(docOpt.get()));
+        return ResponseEntity.ok(convertToDto.convertDocumentToDto(doc));
     }
 
 
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     @DeleteMapping("/{id}")
-    public ResponseEntity<String> deleteFile(@PathVariable String id) {
+    public ResponseEntity<String> deleteFile(@PathVariable String id, @AuthenticationPrincipal User currentUser) {
+        Optional<Document> docOpt = documentService.getDocumentById(id);
+        if (docOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        if (!isOwner(docOpt.get(), currentUser)) {
+            return ResponseEntity.status(403).body("You are not authorized to delete this file.");
+        }
+
         try {
             documentService.deleteFile(id);
             return ResponseEntity.ok("File deleted successfully: " + id);
@@ -91,8 +106,17 @@ public class DocumentController {
         }
     }
 
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     @GetMapping("/{id}/file")
-    public ResponseEntity<?> downloadFile(@PathVariable String id) {
+    public ResponseEntity<?> downloadFile(@PathVariable String id, @AuthenticationPrincipal User currentUser) {
+        Optional<Document> docOpt = documentService.getDocumentById(id);
+        if (docOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        if (!isOwner(docOpt.get(), currentUser)) {
+            return ResponseEntity.status(403).body("You are not authorized to download this file.");
+        }
+
         try {
             Resource resource = documentService.loadFileAsResource(id);
             return ResponseEntity.ok()
@@ -104,8 +128,17 @@ public class DocumentController {
         }
     }
 
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     @PostMapping("/{id}/summarize")
-    public ResponseEntity<?> summarizeDocument(@PathVariable String id, @RequestBody SummarizationSchema.SummarizeRequest summarizeRequest) {
+    public ResponseEntity<?> summarizeDocument(@PathVariable String id, @RequestBody SummarizationSchema.SummarizeRequest summarizeRequest, @AuthenticationPrincipal User currentUser) {
+        Optional<Document> docOpt = documentService.getDocumentById(id);
+        if (docOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        if (!isOwner(docOpt.get(), currentUser)) {
+            return ResponseEntity.status(403).body("You are not authorized to summarize this document.");
+        }
+
         try {
             String summary = geminiService.summarizeAsync(id, summarizeRequest.summaryType());
             SummarizationSchema.SummarizeResponse response = new SummarizationSchema.SummarizeResponse(summary, id);
@@ -117,7 +150,15 @@ public class DocumentController {
 
     @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     @GetMapping("/{id}/summary")
-    public ResponseEntity<?> getLatestSummary(@PathVariable String id) {
+    public ResponseEntity<?> getLatestSummary(@PathVariable String id, @AuthenticationPrincipal User currentUser) {
+        Optional<Document> docOpt = documentService.getDocumentById(id);
+        if (docOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        if (!isOwner(docOpt.get(), currentUser)) {
+            return ResponseEntity.status(403).body("You are not authorized to view this document's summaries.");
+        }
+
         Optional<DocumentSummary> summaryOpt = documentSummaryService.getLatestSummaryForDocument(id);
         if (summaryOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -131,4 +172,16 @@ public class DocumentController {
         resp.put("createdAt", summary.getCreatedAt());
         return ResponseEntity.ok(resp);
     }
+
+    private boolean isOwner(Document doc, User currentUser) {
+        if (doc == null || currentUser == null) return false;
+        try {
+            User owner = doc.getUploadedBy();
+            if (owner == null) return false;
+            return Objects.equals(owner.getId(), currentUser.getId());
+        } catch (NoSuchMethodError | NoSuchFieldError e) {
+            return false;
+        }
+    }
 }
+

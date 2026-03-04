@@ -25,6 +25,10 @@ public class Document {
     private String status;
     private LocalDateTime uploadedAt;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "uploaded_by")
+    private User uploadedBy;
+
     @OneToMany(mappedBy = "document", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<DocumentSummary> summaries = new ArrayList<>();
 
@@ -42,7 +46,7 @@ public class Document {
     private String content;
     //private String uploadedBy;
 
-    public Document(String documentId, String title, String originalFilename, Long size, String fileType, String content) {
+    public Document(String documentId, String title, String originalFilename, Long size, String fileType, String content, User uploadedBy) {
         this.documentId = documentId;
         this.title = title;
         this.originalFilename = originalFilename;
@@ -51,5 +55,6 @@ public class Document {
         this.fileType = fileType;
         this.content = content;
         this.status = "UPLOADED";
+        this.uploadedBy = uploadedBy;
     }
 }
