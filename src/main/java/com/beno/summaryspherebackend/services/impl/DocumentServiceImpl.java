@@ -127,5 +127,20 @@ public class DocumentServiceImpl implements DocumentService {
             throw new IllegalArgumentException("File not found: " + id, ex);
         }
     }
+
+    @Override
+    public void deleteFilesByUser(User user)
+    {
+            List<Document> userFileList = documentRepository.findByUploadedBy(user);
+            for (Document doc : userFileList) {
+                try {
+                    Path filePath = this.fileStorageLocation.resolve(doc.getDocumentId()).normalize();
+                    Files.deleteIfExists(filePath);
+                } catch (IOException e) {
+                    throw new IllegalArgumentException("An error occurred while deleting file: " + doc.getDocumentId(), e);
+                }
+            }
+            documentRepository.deleteAll(userFileList);
+    }
 }
 
