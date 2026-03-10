@@ -13,4 +13,7 @@ public interface DocumentSummaryRepository extends JpaRepository<DocumentSummary
     List<DocumentSummary> findAllByDocument(Document document);
     Optional<DocumentSummary> findFirstByDocumentOrderByCreatedAtDesc(Document document);
 
+    Optional<DocumentSummary> findFirstByDocumentAndSummaryTypeIgnoreCaseOrderByCreatedAtDesc(Document document, String summaryType);
+    List<DocumentSummary> findAllByDocumentOrderByCreatedAtDesc(Document document);
+
 }

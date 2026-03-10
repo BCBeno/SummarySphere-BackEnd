@@ -19,7 +19,9 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -170,6 +172,61 @@ public class DocumentController {
         resp.put("summaryText", summary.getSummaryText());
         resp.put("status", summary.getStatus());
         resp.put("createdAt", summary.getCreatedAt());
+        return ResponseEntity.ok(resp);
+    }
+
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    @GetMapping("/{id}/summary/{summaryType}")
+    public ResponseEntity<?> getSummaryByType(
+            @PathVariable String id,
+            @PathVariable String summaryType,
+            @AuthenticationPrincipal User currentUser
+    ) {
+        Optional<Document> docOpt = documentService.getDocumentById(id);
+        if (docOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        if (!isOwner(docOpt.get(), currentUser)) {
+            return ResponseEntity.status(403).body("You are not authorized to view this document's summaries.");
+        }
+
+        Optional<DocumentSummary> summaryOpt = documentSummaryService.getLatestSummaryForDocumentByType(id, summaryType);
+        if (summaryOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        DocumentSummary summary = summaryOpt.get();
+        HashMap<String, Object> resp = new HashMap<>();
+        resp.put("documentId", id);
+        resp.put("summaryType", summary.getSummaryType());
+        resp.put("summaryText", summary.getSummaryText());
+        resp.put("status", summary.getStatus());
+        resp.put("createdAt", summary.getCreatedAt());
+        return ResponseEntity.ok(resp);
+    }
+
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    @GetMapping("/{id}/summaries")
+    public ResponseEntity<?> listSummaries(@PathVariable String id, @AuthenticationPrincipal User currentUser) {
+        Optional<Document> docOpt = documentService.getDocumentById(id);
+        if (docOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        if (!isOwner(docOpt.get(), currentUser)) {
+            return ResponseEntity.status(403).body("You are not authorized to view this document's summaries.");
+        }
+
+        List<DocumentSummary> summaries = documentSummaryService.getSummariesForDocument(id);
+        List<HashMap<String, Object>> resp = new ArrayList<>();
+        for (DocumentSummary summary : summaries) {
+            HashMap<String, Object> item = new HashMap<>();
+            item.put("documentId", id);
+            item.put("summaryType", summary.getSummaryType());
+            item.put("summaryText", summary.getSummaryText());
+            item.put("status", summary.getStatus());
+            item.put("createdAt", summary.getCreatedAt());
+            resp.add(item);
+        }
         return ResponseEntity.ok(resp);
     }
 
