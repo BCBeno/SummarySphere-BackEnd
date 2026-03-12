@@ -19,5 +19,15 @@ public class AuthSchema {
             String fullName,
             String role
     ) {}
+
+
+    public record ForgotPasswordRequest (
+            String email
+    ) {}
+
+    public record ResetPasswordRequest(
+            String token,
+            String newPassword
+    ) {}
 }
 
