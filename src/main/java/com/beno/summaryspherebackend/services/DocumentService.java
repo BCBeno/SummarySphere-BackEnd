@@ -16,7 +16,7 @@ public interface DocumentService {
     List<DocumentListDTO> listFiles();
     List<DocumentListDTO> listFilesByUser(User user);
     void deleteFile(String id) throws IOException;
-    Resource loadFileAsResource(String id);
+    String generateDownloadLink(String id);
     void deleteFilesByUser(User user);
 
 }

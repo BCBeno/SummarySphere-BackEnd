@@ -19,11 +19,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/documents")
@@ -109,25 +105,21 @@ public class DocumentController {
     }
 
     @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
-    @GetMapping("/{id}/file")
-    public ResponseEntity<?> downloadFile(@PathVariable String id, @AuthenticationPrincipal User currentUser) {
+    @GetMapping("/{id}/download-link")
+    public ResponseEntity<?> getDownloadLink(@PathVariable String id, @AuthenticationPrincipal User currentUser) {
         Optional<Document> docOpt = documentService.getDocumentById(id);
         if (docOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
         if (!isOwner(docOpt.get(), currentUser)) {
-            return ResponseEntity.status(403).body("You are not authorized to download this file.");
+            return ResponseEntity.status(403).body("Neautorizat.");
         }
 
-        try {
-            Resource resource = documentService.loadFileAsResource(id);
-            return ResponseEntity.ok()
-                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                    .header("Content-Disposition", "attachment; filename=\"" + resource.getFilename() + "\"")
-                    .body(resource);
-        } catch (IllegalArgumentException ex) {
-            return ResponseEntity.badRequest().body("There was an error downloading the file: " + ex.getMessage());
-        }
+        String sasUrl = documentService.generateDownloadLink(id);
+        Map<String, String> response = new HashMap<>();
+        response.put("downloadUrl", sasUrl);
+
+        return ResponseEntity.ok(response);
     }
 
     @PreAuthorize("hasAnyRole('USER', 'ADMIN')")

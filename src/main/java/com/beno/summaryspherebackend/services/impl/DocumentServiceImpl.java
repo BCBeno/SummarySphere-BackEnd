@@ -2,6 +2,8 @@ package com.beno.summaryspherebackend.services.impl;
 
 import com.azure.storage.blob.BlobClient;
 import com.azure.storage.blob.BlobContainerClient;
+import com.azure.storage.blob.sas.BlobSasPermission;
+import com.azure.storage.blob.sas.BlobServiceSasSignatureValues;
 import com.beno.summaryspherebackend.ModelMappers.ConvertToDto;
 import com.beno.summaryspherebackend.dtos.DocumentListDTO;
 import com.beno.summaryspherebackend.entities.Document;
@@ -17,6 +19,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.time.OffsetDateTime;
 import java.util.*;
 
 @Service
@@ -102,7 +105,6 @@ public class DocumentServiceImpl implements DocumentService {
             throw new IllegalArgumentException("File not found with id " + id);
         }
 
-        // ȘTERGERE DIN AZURE
         BlobClient blobClient = blobContainerClient.getBlobClient(id);
         blobClient.deleteIfExists();
 
@@ -110,22 +112,23 @@ public class DocumentServiceImpl implements DocumentService {
     }
 
     @Override
-    public Resource loadFileAsResource(String id) {
+    public String generateDownloadLink(String id) {
         BlobClient blobClient = blobContainerClient.getBlobClient(id);
+
         if (!blobClient.exists()) {
-            throw new IllegalArgumentException("File not found in storage: " + id);
+            throw new IllegalArgumentException("Fișierul nu există în stocare: " + id);
         }
 
-        // DESCĂRCARE DIN AZURE ÎN MEMORIE
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        blobClient.downloadStream(outputStream);
-        return new ByteArrayResource(outputStream.toByteArray()) {
-            @Override
-            public String getFilename() {
-                return id;
-            }
-        };
+        BlobSasPermission permissions = new BlobSasPermission().setReadPermission(true);
+
+        OffsetDateTime expiryTime = OffsetDateTime.now().plusMinutes(10);
+
+        BlobServiceSasSignatureValues values = new BlobServiceSasSignatureValues(expiryTime, permissions)
+                .setStartTime(OffsetDateTime.now().minusMinutes(1));
+
+        return blobClient.getBlobUrl() + "?" + blobClient.generateSas(values);
     }
+
 
     @Override
     public void deleteFilesByUser(User user) {
