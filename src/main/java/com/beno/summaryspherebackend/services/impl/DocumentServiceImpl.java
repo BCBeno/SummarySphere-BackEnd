@@ -1,5 +1,7 @@
 package com.beno.summaryspherebackend.services.impl;
 
+import com.azure.storage.blob.BlobClient;
+import com.azure.storage.blob.BlobContainerClient;
 import com.beno.summaryspherebackend.ModelMappers.ConvertToDto;
 import com.beno.summaryspherebackend.dtos.DocumentListDTO;
 import com.beno.summaryspherebackend.entities.Document;
@@ -7,49 +9,43 @@ import com.beno.summaryspherebackend.entities.User;
 import com.beno.summaryspherebackend.repositories.DocumentRepository;
 import com.beno.summaryspherebackend.services.DocumentService;
 import com.beno.summaryspherebackend.services.FileExtractionService;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.net.MalformedURLException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.*;
 
 @Service
 public class DocumentServiceImpl implements DocumentService {
 
-    private final Path fileStorageLocation;
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(".pdf", ".docx", ".txt");
     private final DocumentRepository documentRepository;
     private final ConvertToDto convertToDto;
     private final FileExtractionService fileExtractionService;
+    private final BlobContainerClient blobContainerClient;
 
-    public DocumentServiceImpl(DocumentRepository documentRepository, ConvertToDto convertToDto, FileExtractionService fileExtractionService) {
+    public DocumentServiceImpl(DocumentRepository documentRepository, ConvertToDto convertToDto,
+                               FileExtractionService fileExtractionService, BlobContainerClient blobContainerClient) {
         this.fileExtractionService = fileExtractionService;
         this.documentRepository = documentRepository;
         this.convertToDto = convertToDto;
-        this.fileStorageLocation = Paths.get("uploads").toAbsolutePath().normalize();
-        try {
-            Files.createDirectories(this.fileStorageLocation);
-        } catch (Exception ex) {
-            throw new RuntimeException("Could not create the directory where the uploaded files will be stored.", ex);
-        }
+        this.blobContainerClient = blobContainerClient;
     }
 
     @Override
     public String storeFile(MultipartFile file, String title, User uploader) throws IOException {
-        byte[] bytes = file.getBytes();
+        byte[] bytes = file.getBytes(); // COST MARE DE MEMORIE. De rezolvat în viitor.
         String originalFileName = Objects.requireNonNull(file.getOriginalFilename());
-
         String docTitle = (title != null && !title.trim().isEmpty()) ? title : originalFileName;
 
         if(file.getSize() > 25 * 1024 * 1024) {
             throw new IllegalArgumentException("File size exceeds the maximum limit of 25MB");
         }
+
         int dotIndex = originalFileName.lastIndexOf('.');
         String fileExtension;
         if (dotIndex >= 0 && dotIndex < originalFileName.length() - 1) {
@@ -61,11 +57,8 @@ public class DocumentServiceImpl implements DocumentService {
         if (!ALLOWED_EXTENSIONS.contains(fileExtension)) {
             throw new IllegalArgumentException("Invalid file type. Allowed types: txt, pdf, docx");
         }
-        String uniqueFileName = UUID.randomUUID() + fileExtension;
 
-        if (originalFileName.contains("..")) {
-            throw new IllegalArgumentException("Filename contains invalid path sequence " + originalFileName);
-        }
+        String uniqueFileName = UUID.randomUUID() + fileExtension;
 
         String content;
         try {
@@ -74,8 +67,10 @@ public class DocumentServiceImpl implements DocumentService {
             throw new IllegalArgumentException("Extraction failed: " + e.getMessage());
         }
 
-        Path targetLocation = this.fileStorageLocation.resolve(uniqueFileName);
-        Files.write(targetLocation, bytes);
+        BlobClient blobClient = blobContainerClient.getBlobClient(uniqueFileName);
+        try (ByteArrayInputStream dataStream = new ByteArrayInputStream(bytes)) {
+            blobClient.upload(dataStream, bytes.length, true);
+        }
 
         documentRepository.save(new Document(uniqueFileName, docTitle, originalFileName, (long)bytes.length, fileExtension, content, uploader));
         return uniqueFileName;
@@ -88,59 +83,57 @@ public class DocumentServiceImpl implements DocumentService {
 
     @Override
     public List<DocumentListDTO> listFiles() {
-        List<Document> documents = documentRepository.findAll();
-        List<DocumentListDTO> documentDTOs = new ArrayList<>();
-        documents.forEach(doc -> documentDTOs.add(convertToDto.convertDocumentListToDto(doc)));
-        return documentDTOs;
+        return documentRepository.findAll().stream()
+                .map(convertToDto::convertDocumentListToDto)
+                .toList();
     }
 
     @Override
     public List<DocumentListDTO> listFilesByUser(User user) {
-        List<Document> documents = documentRepository.findByUploadedBy(user);
-        List<DocumentListDTO> documentDTOs = new ArrayList<>();
-        documents.forEach(doc -> documentDTOs.add(convertToDto.convertDocumentListToDto(doc)));
-        return documentDTOs;
+        return documentRepository.findByUploadedBy(user).stream()
+                .map(convertToDto::convertDocumentListToDto)
+                .toList();
     }
 
     @Override
-    public void deleteFile(String id) throws IOException {
+    public void deleteFile(String id) {
         Optional<Document> documentOpt = documentRepository.findById(id);
         if (documentOpt.isEmpty()) {
             throw new IllegalArgumentException("File not found with id " + id);
         }
-        Path filePath = this.fileStorageLocation.resolve(id).normalize();
-        Files.deleteIfExists(filePath);
+
+        // ȘTERGERE DIN AZURE
+        BlobClient blobClient = blobContainerClient.getBlobClient(id);
+        blobClient.deleteIfExists();
+
         documentRepository.deleteById(id);
     }
 
     @Override
     public Resource loadFileAsResource(String id) {
-        try {
-            Path filePath = this.fileStorageLocation.resolve(id).normalize();
-            UrlResource resource = new UrlResource(filePath.toUri());
-            if (resource.exists() && resource.isReadable()) {
-                return resource;
-            } else {
-                throw new IllegalArgumentException("File not found or not readable: " + id);
-            }
-        } catch (MalformedURLException ex) {
-            throw new IllegalArgumentException("File not found: " + id, ex);
+        BlobClient blobClient = blobContainerClient.getBlobClient(id);
+        if (!blobClient.exists()) {
+            throw new IllegalArgumentException("File not found in storage: " + id);
         }
+
+        // DESCĂRCARE DIN AZURE ÎN MEMORIE
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        blobClient.downloadStream(outputStream);
+        return new ByteArrayResource(outputStream.toByteArray()) {
+            @Override
+            public String getFilename() {
+                return id;
+            }
+        };
     }
 
     @Override
-    public void deleteFilesByUser(User user)
-    {
-            List<Document> userFileList = documentRepository.findByUploadedBy(user);
-            for (Document doc : userFileList) {
-                try {
-                    Path filePath = this.fileStorageLocation.resolve(doc.getDocumentId()).normalize();
-                    Files.deleteIfExists(filePath);
-                } catch (IOException e) {
-                    throw new IllegalArgumentException("An error occurred while deleting file: " + doc.getDocumentId(), e);
-                }
-            }
-            documentRepository.deleteAll(userFileList);
+    public void deleteFilesByUser(User user) {
+        List<Document> userFileList = documentRepository.findByUploadedBy(user);
+        for (Document doc : userFileList) {
+            BlobClient blobClient = blobContainerClient.getBlobClient(doc.getDocumentId());
+            blobClient.deleteIfExists();
+        }
+        documentRepository.deleteAll(userFileList);
     }
 }
-

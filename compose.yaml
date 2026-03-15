@@ -6,3 +6,9 @@ services:
     restart: always
     environment:
       POSTGRES_PASSWORD: postgres
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite
+    ports:
+       - "10000:10000"
+    command: azurite-blob --blobHost 0.0.0.0 --skipApiVersionCheck
