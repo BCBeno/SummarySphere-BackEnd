@@ -116,7 +116,7 @@ public class DocumentServiceImpl implements DocumentService {
         BlobClient blobClient = blobContainerClient.getBlobClient(id);
 
         if (!blobClient.exists()) {
-            throw new IllegalArgumentException("Fișierul nu există în stocare: " + id);
+            throw new IllegalArgumentException("File not found with id" + id);
         }
 
         BlobSasPermission permissions = new BlobSasPermission().setReadPermission(true);
