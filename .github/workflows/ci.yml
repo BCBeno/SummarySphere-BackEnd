@@ -16,6 +16,8 @@ permissions:
 jobs:
   build:
     env:
+      AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
+      AZURE_STORAGE_CONTAINER_NAME: ${{ secrets.AZURE_STORAGE_CONTAINER_NAME }}
       azure.blob.enabled: false
     runs-on: ubuntu-latest
     services:
