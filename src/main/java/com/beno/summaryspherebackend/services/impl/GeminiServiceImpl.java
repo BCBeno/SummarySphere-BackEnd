@@ -52,16 +52,23 @@ public class GeminiServiceImpl implements GeminiService {
             {text}
             """;
 
-        String result = chatClient.prompt()
-                .user(u -> u.text(prompt)
+            try {
+                String result = chatClient.prompt()
+                    .user(u -> u.text(prompt)
                         .param("type", type)
                         .param("text", rawText))
-                .call()
-                .content();
-        documentSummaryRepository.save(new DocumentSummary(null, document, type, result, SummaryStatus.COMPLETED, LocalDateTime.now()));
-        document.setStatus(SummaryStatus.COMPLETED.name());
-        documentRepository.save(document);
-        return result;
+                    .call()
+                    .content();
+                documentSummaryRepository.save(new DocumentSummary(null, document, type, result, SummaryStatus.COMPLETED, LocalDateTime.now()));
+                document.setStatus(SummaryStatus.COMPLETED.name());
+                documentRepository.save(document);
+                return result;
+            } catch (RuntimeException ex) {
+                documentSummaryRepository.save(new DocumentSummary(null, document, type, "Summary generation failed.", SummaryStatus.FAILED, LocalDateTime.now()));
+                document.setStatus(SummaryStatus.FAILED.name());
+                documentRepository.save(document);
+                throw new IllegalStateException("Unable to generate the summary right now. Please verify the Gemini API key and try again.", ex);
+            }
     }
 }
 

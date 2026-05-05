@@ -139,6 +139,8 @@ public class DocumentController {
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.badRequest().body("There was an error summarizing the document: " + ex.getMessage());
+        } catch (IllegalStateException ex) {
+            return ResponseEntity.status(503).body("There was an error summarizing the document: " + ex.getMessage());
         }
     }
 
