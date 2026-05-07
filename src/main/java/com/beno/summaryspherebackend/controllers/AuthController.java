@@ -28,7 +28,11 @@ public class AuthController {
 
     @PostMapping("/forgot-password")
     public ResponseEntity<?> forgotPassword(@RequestBody AuthSchema.ForgotPasswordRequest request) {
-        authService.forgotPassword(request.email());
+        try {
+            authService.forgotPassword(request.email());
+        } catch (Exception ignored) {
+            // Intentionally return the same response to avoid leaking account/email state.
+        }
         return ResponseEntity.ok("Password reset link sent to your email");
     }
 
