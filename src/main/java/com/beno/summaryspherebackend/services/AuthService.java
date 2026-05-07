@@ -56,27 +56,31 @@ public class AuthService {
 
 
     public void forgotPassword(String email) {
-        var user = userRepository.findByEmail(email);
-        if (user.isEmpty()) {
-            return; // Silently succeed to prevent email enumeration
+        try {
+            var user = userRepository.findByEmail(email);
+            if (user.isEmpty()) {
+                return;
+            }
+
+            User foundUser = user.get();
+            String resetToken = UUID.randomUUID().toString();
+            foundUser.setResetToken(resetToken);
+            foundUser.setResetTokenExpiry(LocalDateTime.now().plusHours(1));
+            userRepository.save(foundUser);
+
+            emailService.sendResetPasswordEmail(email, resetToken);
+        } catch (Exception ignored) {
+            // Always return success to the client for forgot-password flows.
         }
-
-        User foundUser = user.get();
-        String resetToken = UUID.randomUUID().toString();
-        foundUser.setResetToken(resetToken);
-        foundUser.setResetTokenExpiry(LocalDateTime.now().plusHours(1));
-        userRepository.save(foundUser);
-
-        emailService.sendResetPasswordEmail(email, resetToken);
     }
 
     @Transactional
     public void resetPassword(String token, String newPassword) {
         User user = userRepository.findByResetToken(token)
-                .orElseThrow(() -> new RuntimeException("Invalid token"));
+                .orElseThrow(() -> new IllegalArgumentException("Invalid token"));
 
         if (user.getResetTokenExpiry().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException("Token expired");
+            throw new IllegalArgumentException("Token expired");
         }
 
         user.setPassword(passwordEncoder.encode(newPassword));

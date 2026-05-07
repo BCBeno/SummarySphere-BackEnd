@@ -141,7 +141,8 @@ class AuthServiceTest {
     @Test
     void resetPassword_whenTokenInvalid_throws() {
         when(userRepository.findByResetToken("bad")).thenReturn(Optional.empty());
-        assertThrows(RuntimeException.class, () -> authService.resetPassword("bad", "new"));
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> authService.resetPassword("bad", "new"));
+        assertEquals("Invalid token", exception.getMessage());
         verify(userRepository, never()).save(any());
     }
 
@@ -158,7 +159,8 @@ class AuthServiceTest {
 
         when(userRepository.findByResetToken("t")).thenReturn(Optional.of(user));
 
-        assertThrows(RuntimeException.class, () -> authService.resetPassword("t", "new"));
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> authService.resetPassword("t", "new"));
+        assertEquals("Token expired", exception.getMessage());
 
         verify(passwordEncoder, never()).encode(anyString());
         verify(userRepository, never()).save(any());
