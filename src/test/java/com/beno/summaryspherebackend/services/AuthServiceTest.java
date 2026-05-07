@@ -103,11 +103,14 @@ class AuthServiceTest {
     }
 
     @Test
-    void forgotPassword_whenUserMissing_throws() {
+    void forgotPassword_whenUserMissing_succeeds() {
+        // Security: silently succeed to prevent email enumeration
         when(userRepository.findByEmail("missing@test.com")).thenReturn(Optional.empty());
 
-        assertThrows(RuntimeException.class, () -> authService.forgotPassword("missing@test.com"));
+        authService.forgotPassword("missing@test.com");
+
         verify(emailService, never()).sendResetPasswordEmail(anyString(), anyString());
+        verify(userRepository, never()).save(any());
     }
 
     @Test

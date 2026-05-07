@@ -56,13 +56,16 @@ public class AuthService {
 
 
     public void forgotPassword(String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        var user = userRepository.findByEmail(email);
+        if (user.isEmpty()) {
+            return; // Silently succeed to prevent email enumeration
+        }
 
+        User foundUser = user.get();
         String resetToken = UUID.randomUUID().toString();
-        user.setResetToken(resetToken);
-        user.setResetTokenExpiry(LocalDateTime.now().plusHours(1));
-        userRepository.save(user);
+        foundUser.setResetToken(resetToken);
+        foundUser.setResetTokenExpiry(LocalDateTime.now().plusHours(1));
+        userRepository.save(foundUser);
 
         emailService.sendResetPasswordEmail(email, resetToken);
     }
