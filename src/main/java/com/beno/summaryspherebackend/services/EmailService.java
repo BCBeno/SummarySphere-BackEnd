@@ -1,5 +1,7 @@
 package com.beno.summaryspherebackend.services;
 
+import java.util.concurrent.CompletableFuture;
+
 public interface EmailService {
-    void sendResetPasswordEmail(String email, String token);
+    CompletableFuture<Void> sendResetPasswordEmail(String email, String token);
 }

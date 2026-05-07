@@ -28,11 +28,14 @@ public class AuthController {
 
     @PostMapping("/forgot-password")
     public ResponseEntity<?> forgotPassword(@RequestBody AuthSchema.ForgotPasswordRequest request) {
+        // Email is sent asynchronously to avoid timeouts and return immediately
         try {
             authService.forgotPassword(request.email());
         } catch (Exception ignored) {
             // Intentionally return the same response to avoid leaking account/email state.
+            // This prevents user enumeration attacks.
         }
+        // Always return 200 - email sending is async and doesn't block the response
         return ResponseEntity.ok("Password reset link sent to your email");
     }
 

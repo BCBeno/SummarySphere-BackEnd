@@ -68,9 +68,11 @@ public class AuthService {
             foundUser.setResetTokenExpiry(LocalDateTime.now().plusHours(1));
             userRepository.save(foundUser);
 
+            // Send email asynchronously - no need to wait for completion
             emailService.sendResetPasswordEmail(email, resetToken);
         } catch (Exception ignored) {
             // Always return success to the client for forgot-password flows.
+            // This prevents email enumeration attacks.
         }
     }
 
