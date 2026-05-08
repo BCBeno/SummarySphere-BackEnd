@@ -79,8 +79,8 @@ class DocumentServiceImplTest {
         assertEquals("test.pdf", saved.getOriginalFilename());
         assertEquals((long) contentBytes.length, saved.getSize());
         assertEquals(uploader, saved.getUploadedBy());
-        verify(blobContainerClient, times(1)).getBlobClient(anyString());
-        verify(blobClient, times(1)).upload(any(InputStream.class), anyLong(), anyBoolean());
+        verify(blobContainerClient, times(2)).getBlobClient(anyString());
+        verify(blobClient, times(2)).upload(any(InputStream.class), anyLong(), anyBoolean());
     }
 
     @Test
