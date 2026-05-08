@@ -28,8 +28,11 @@ public class DocumentSummary {
 
     private String summaryType;
 
-    @Column(columnDefinition = "TEXT")
+    @Transient
     private String summaryText;
+
+    @Column(name = "summary_blob_name")
+    private String summaryBlobName;
 
     @Enumerated(EnumType.STRING)
     private SummaryStatus status = SummaryStatus.PENDING;

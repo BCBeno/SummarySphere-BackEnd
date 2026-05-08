@@ -19,6 +19,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.util.*;
 
@@ -75,13 +76,19 @@ public class DocumentServiceImpl implements DocumentService {
             blobClient.upload(dataStream, bytes.length, true);
         }
 
-        documentRepository.save(new Document(uniqueFileName, docTitle, originalFileName, (long)bytes.length, fileExtension, content, uploader));
+        String contentBlobName = buildContentBlobName(uniqueFileName);
+        uploadTextBlob(contentBlobName, content);
+
+        Document document = new Document(uniqueFileName, docTitle, originalFileName, (long)bytes.length, fileExtension, null, uploader);
+        document.setContentBlobName(contentBlobName);
+        documentRepository.save(document);
         return uniqueFileName;
     }
 
     @Override
     public Optional<Document> getDocumentById(String id) {
-        return documentRepository.findById(id);
+        return documentRepository.findById(id)
+                .map(this::hydrateDocumentContent);
     }
 
     @Override
@@ -107,6 +114,11 @@ public class DocumentServiceImpl implements DocumentService {
 
         BlobClient blobClient = blobContainerClient.getBlobClient(id);
         blobClient.deleteIfExists();
+
+        Document document = documentOpt.get();
+        if (document.getContentBlobName() != null && !document.getContentBlobName().isBlank()) {
+            blobContainerClient.getBlobClient(document.getContentBlobName()).deleteIfExists();
+        }
 
         documentRepository.deleteById(id);
     }
@@ -136,7 +148,44 @@ public class DocumentServiceImpl implements DocumentService {
         for (Document doc : userFileList) {
             BlobClient blobClient = blobContainerClient.getBlobClient(doc.getDocumentId());
             blobClient.deleteIfExists();
+            if (doc.getContentBlobName() != null && !doc.getContentBlobName().isBlank()) {
+                blobContainerClient.getBlobClient(doc.getContentBlobName()).deleteIfExists();
+            }
         }
         documentRepository.deleteAll(userFileList);
+    }
+
+    private String buildContentBlobName(String documentId) {
+        return "documents/" + documentId + "/content.txt";
+    }
+
+    private void uploadTextBlob(String blobName, String content) throws IOException {
+        BlobClient blobClient = blobContainerClient.getBlobClient(blobName);
+        byte[] contentBytes = content.getBytes(StandardCharsets.UTF_8);
+        try (ByteArrayInputStream dataStream = new ByteArrayInputStream(contentBytes)) {
+            blobClient.upload(dataStream, contentBytes.length, true);
+        }
+    }
+
+    private Document hydrateDocumentContent(Document document) {
+        if (document == null) {
+            return null;
+        }
+
+        if (document.getContentBlobName() != null && !document.getContentBlobName().isBlank()) {
+            BlobClient blobClient = blobContainerClient.getBlobClient(document.getContentBlobName());
+            if (!blobClient.exists()) {
+                return document;
+            }
+
+            try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+                blobClient.downloadStream(outputStream);
+                document.setContent(outputStream.toString(StandardCharsets.UTF_8));
+            } catch (IOException e) {
+                throw new IllegalStateException("Unable to read the document content from blob storage.", e);
+            }
+        }
+
+        return document;
     }
 }

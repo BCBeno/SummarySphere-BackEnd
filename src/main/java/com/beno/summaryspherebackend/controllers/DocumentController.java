@@ -134,11 +134,19 @@ public class DocumentController {
         }
 
         try {
-            String summary = geminiService.summarizeAsync(id, summarizeRequest.summaryType());
+            // geminiService now returns CompletableFuture<String> (async). Block for now to keep controller simple.
+            String summary = geminiService.summarizeAsync(id, summarizeRequest.summaryType()).join();
             SummarizationSchema.SummarizeResponse response = new SummarizationSchema.SummarizeResponse(summary, id);
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.badRequest().body("There was an error summarizing the document: " + ex.getMessage());
+        } catch (java.util.concurrent.CompletionException ex) {
+            // unwrap the cause for clearer messaging
+            Throwable cause = ex.getCause();
+            if (cause instanceof IllegalStateException) {
+                return ResponseEntity.status(503).body("There was an error summarizing the document: " + cause.getMessage());
+            }
+            return ResponseEntity.status(500).body("There was an unexpected error summarizing the document: " + cause.getMessage());
         } catch (IllegalStateException ex) {
             return ResponseEntity.status(503).body("There was an error summarizing the document: " + ex.getMessage());
         }
@@ -235,4 +243,3 @@ public class DocumentController {
         }
     }
 }
-

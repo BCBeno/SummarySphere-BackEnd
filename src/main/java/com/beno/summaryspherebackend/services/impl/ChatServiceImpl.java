@@ -6,8 +6,8 @@ import com.beno.summaryspherebackend.entities.Document;
 import com.beno.summaryspherebackend.entities.User;
 import com.beno.summaryspherebackend.enums.MessageRole;
 import com.beno.summaryspherebackend.repositories.ChatMessageRepository;
-import com.beno.summaryspherebackend.repositories.DocumentRepository;
 import com.beno.summaryspherebackend.services.ChatService;
+import com.beno.summaryspherebackend.services.DocumentService;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
@@ -24,19 +24,19 @@ import java.util.List;
 public class ChatServiceImpl implements ChatService {
 
     private final ChatClient chatClient;
-    private final DocumentRepository documentRepository;
+    private final DocumentService documentService;
     private final ChatMessageRepository chatMessageRepository;
 
-    public ChatServiceImpl(ChatClient.Builder builder, DocumentRepository documentRepository, ChatMessageRepository chatMessageRepository) {
+    public ChatServiceImpl(ChatClient.Builder builder, DocumentService documentService, ChatMessageRepository chatMessageRepository) {
         this.chatClient = builder.build();
-        this.documentRepository = documentRepository;
+        this.documentService = documentService;
         this.chatMessageRepository = chatMessageRepository;
     }
 
     @Override
     @Transactional
     public ChatSchema.ChatMessageDTO sendMessage(String documentId, String message, User user) {
-        Document document = documentRepository.findById(documentId)
+        Document document = documentService.getDocumentById(documentId)
                 .orElseThrow(() -> new IllegalArgumentException("Document not found: " + documentId));
 
         if (document.getContent() == null || document.getContent().isBlank()) {
@@ -80,7 +80,7 @@ public class ChatServiceImpl implements ChatService {
 
     @Override
     public List<ChatSchema.ChatMessageDTO> getChatHistory(String documentId, User user) {
-        Document document = documentRepository.findById(documentId)
+        Document document = documentService.getDocumentById(documentId)
                 .orElseThrow(() -> new IllegalArgumentException("Document not found: " + documentId));
 
         return chatMessageRepository.findAllByDocumentAndUserOrderByCreatedAtAsc(document, user)
@@ -92,7 +92,7 @@ public class ChatServiceImpl implements ChatService {
     @Override
     @Transactional
     public void clearChatHistory(String documentId, User user) {
-        Document document = documentRepository.findById(documentId)
+        Document document = documentService.getDocumentById(documentId)
                 .orElseThrow(() -> new IllegalArgumentException("Document not found: " + documentId));
 
         chatMessageRepository.deleteAllByDocumentAndUser(document, user);

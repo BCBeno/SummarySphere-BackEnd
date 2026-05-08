@@ -45,8 +45,11 @@ public class Document {
         summary.setDocument(null);
     }
 
-    @Column(columnDefinition = "TEXT")
+    @Transient
     private String content;
+
+    @Column(name = "content_blob_name")
+    private String contentBlobName;
     //private String uploadedBy;
 
     public Document(String documentId, String title, String originalFilename, Long size, String fileType, String content, User uploadedBy) {

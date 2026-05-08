@@ -1,33 +1,50 @@
 package com.beno.summaryspherebackend.services.impl;
 
+import com.azure.storage.blob.BlobClient;
+import com.azure.storage.blob.BlobContainerClient;
 import com.beno.summaryspherebackend.entities.Document;
 import com.beno.summaryspherebackend.entities.DocumentSummary;
 import com.beno.summaryspherebackend.enums.SummaryStatus;
 import com.beno.summaryspherebackend.repositories.DocumentRepository;
 import com.beno.summaryspherebackend.repositories.DocumentSummaryRepository;
 import com.beno.summaryspherebackend.services.GeminiService;
+import com.beno.summaryspherebackend.services.DocumentService;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 public class GeminiServiceImpl implements GeminiService {
     private final ChatClient chatClient;
     private final DocumentSummaryRepository documentSummaryRepository;
+    private final DocumentService documentService;
     private final DocumentRepository documentRepository;
-    public GeminiServiceImpl(ChatClient.Builder builder, DocumentSummaryRepository documentSummaryRepository, DocumentRepository documentRepository) {
-        this.documentRepository = documentRepository;
+    private final BlobContainerClient blobContainerClient;
+
+    public GeminiServiceImpl(ChatClient.Builder builder,
+                             DocumentSummaryRepository documentSummaryRepository,
+                             DocumentService documentService,
+                             DocumentRepository documentRepository,
+                             BlobContainerClient blobContainerClient) {
         this.documentSummaryRepository = documentSummaryRepository;
+        this.documentService = documentService;
+        this.documentRepository = documentRepository;
+        this.blobContainerClient = blobContainerClient;
         this.chatClient = builder.build();
     }
 
     @Async
     @Override
-    public String summarizeAsync(String docId, String type) {
-        Document document = documentRepository.findById(docId).orElseThrow(() -> new IllegalArgumentException("Document with ID " + docId + " not found"));
+    public CompletableFuture<String> summarizeAsync(String docId, String type) {
+        Document document = documentService.getDocumentById(docId)
+            .orElseThrow(() -> new IllegalArgumentException("Document with ID " + docId + " not found"));
         String rawText = document.getContent();
 
         if(rawText == null || rawText.isEmpty()) {
@@ -59,16 +76,37 @@ public class GeminiServiceImpl implements GeminiService {
                         .param("text", rawText))
                     .call()
                     .content();
-                documentSummaryRepository.save(new DocumentSummary(null, document, type, result, SummaryStatus.COMPLETED, LocalDateTime.now()));
+
+                String blobName = buildSummaryBlobName(docId, type);
+                uploadSummaryText(blobName, result);
+
+                documentSummaryRepository.save(new DocumentSummary(null, document, type, result, blobName, SummaryStatus.COMPLETED, LocalDateTime.now()));
                 document.setStatus(SummaryStatus.COMPLETED.name());
                 documentRepository.save(document);
-                return result;
+                return CompletableFuture.completedFuture(result);
             } catch (RuntimeException ex) {
-                documentSummaryRepository.save(new DocumentSummary(null, document, type, "Summary generation failed.", SummaryStatus.FAILED, LocalDateTime.now()));
+                documentSummaryRepository.save(new DocumentSummary(null, document, type, null, null, SummaryStatus.FAILED, LocalDateTime.now()));
                 document.setStatus(SummaryStatus.FAILED.name());
                 documentRepository.save(document);
-                throw new IllegalStateException("Unable to generate the summary right now. Please verify the Gemini API key and try again.", ex);
+                return CompletableFuture.failedFuture(new IllegalStateException("Unable to generate the summary right now. Please verify the Gemini API key and try again.", ex));
             }
     }
-}
 
+    private String buildSummaryBlobName(String documentId, String type) {
+        String normalizedType = type == null ? "summary" : type.trim().toLowerCase().replaceAll("[^a-z0-9]+", "-");
+        if (normalizedType.isBlank()) {
+            normalizedType = "summary";
+        }
+        return "summaries/" + documentId + "/" + normalizedType + "-" + UUID.randomUUID() + ".txt";
+    }
+
+    private void uploadSummaryText(String blobName, String summaryText) {
+        BlobClient blobClient = blobContainerClient.getBlobClient(blobName);
+        byte[] summaryBytes = summaryText.getBytes(StandardCharsets.UTF_8);
+        try (ByteArrayInputStream dataStream = new ByteArrayInputStream(summaryBytes)) {
+            blobClient.upload(dataStream, summaryBytes.length, true);
+        } catch (Exception e) {
+            throw new IllegalStateException("Unable to store the generated summary in blob storage.", e);
+        }
+    }
+}
