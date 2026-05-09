@@ -9,6 +9,7 @@ import com.beno.summaryspherebackend.dtos.DocumentListDTO;
 import com.beno.summaryspherebackend.entities.Document;
 import com.beno.summaryspherebackend.entities.User;
 import com.beno.summaryspherebackend.repositories.DocumentRepository;
+import com.beno.summaryspherebackend.repositories.DocumentSummaryRepository;
 import com.beno.summaryspherebackend.services.DocumentService;
 import com.beno.summaryspherebackend.services.FileExtractionService;
 import org.springframework.core.io.ByteArrayResource;
@@ -31,13 +32,16 @@ public class DocumentServiceImpl implements DocumentService {
     private final ConvertToDto convertToDto;
     private final FileExtractionService fileExtractionService;
     private final BlobContainerClient blobContainerClient;
+    private final DocumentSummaryRepository documentSummaryRepository;
 
     public DocumentServiceImpl(DocumentRepository documentRepository, ConvertToDto convertToDto,
-                               FileExtractionService fileExtractionService, BlobContainerClient blobContainerClient) {
+                               FileExtractionService fileExtractionService, BlobContainerClient blobContainerClient,
+                               DocumentSummaryRepository documentSummaryRepository) {
         this.fileExtractionService = fileExtractionService;
         this.documentRepository = documentRepository;
         this.convertToDto = convertToDto;
         this.blobContainerClient = blobContainerClient;
+        this.documentSummaryRepository = documentSummaryRepository;
     }
 
     @Override
@@ -112,12 +116,30 @@ public class DocumentServiceImpl implements DocumentService {
             throw new IllegalArgumentException("File not found with id " + id);
         }
 
+        Document document = documentOpt.get();
+
+        // delete main blob
         BlobClient blobClient = blobContainerClient.getBlobClient(id);
         blobClient.deleteIfExists();
 
-        Document document = documentOpt.get();
+        // delete extracted content blob
         if (document.getContentBlobName() != null && !document.getContentBlobName().isBlank()) {
             blobContainerClient.getBlobClient(document.getContentBlobName()).deleteIfExists();
+        }
+
+        // delete any summary blobs and DB records
+        try {
+            var summaries = documentSummaryRepository.findAllByDocument(document);
+            for (var summary : summaries) {
+                if (summary.getSummaryBlobName() != null && !summary.getSummaryBlobName().isBlank()) {
+                    blobContainerClient.getBlobClient(summary.getSummaryBlobName()).deleteIfExists();
+                }
+            }
+            if (!summaries.isEmpty()) {
+                documentSummaryRepository.deleteAll(summaries);
+            }
+        } catch (Exception ex) {
+            // swallow to avoid partial delete; caller can handle if needed
         }
 
         documentRepository.deleteById(id);
@@ -150,6 +172,20 @@ public class DocumentServiceImpl implements DocumentService {
             blobClient.deleteIfExists();
             if (doc.getContentBlobName() != null && !doc.getContentBlobName().isBlank()) {
                 blobContainerClient.getBlobClient(doc.getContentBlobName()).deleteIfExists();
+            }
+
+            try {
+                var summaries = documentSummaryRepository.findAllByDocument(doc);
+                for (var summary : summaries) {
+                    if (summary.getSummaryBlobName() != null && !summary.getSummaryBlobName().isBlank()) {
+                        blobContainerClient.getBlobClient(summary.getSummaryBlobName()).deleteIfExists();
+                    }
+                }
+                if (!summaries.isEmpty()) {
+                    documentSummaryRepository.deleteAll(summaries);
+                }
+            } catch (Exception ex) {
+                // ignore and continue with next document
             }
         }
         documentRepository.deleteAll(userFileList);

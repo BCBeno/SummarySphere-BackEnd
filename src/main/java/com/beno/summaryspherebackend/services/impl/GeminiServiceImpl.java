@@ -12,6 +12,8 @@ import com.beno.summaryspherebackend.services.DocumentService;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
@@ -22,6 +24,7 @@ import java.util.concurrent.CompletableFuture;
 
 @Service
 public class GeminiServiceImpl implements GeminiService {
+    private static final Logger log = LoggerFactory.getLogger(GeminiServiceImpl.class);
     private final ChatClient chatClient;
     private final DocumentSummaryRepository documentSummaryRepository;
     private final DocumentService documentService;
@@ -70,6 +73,8 @@ public class GeminiServiceImpl implements GeminiService {
             """;
 
             try {
+                int textLen = rawText == null ? 0 : rawText.length();
+                log.debug("Summarize request: docId={}, type={}, textLen={}", docId, type, textLen);
                 String result = chatClient.prompt()
                     .user(u -> u.text(prompt)
                         .param("type", type)
@@ -85,6 +90,8 @@ public class GeminiServiceImpl implements GeminiService {
                 documentRepository.save(document);
                 return CompletableFuture.completedFuture(result);
             } catch (RuntimeException ex) {
+                int textLen = rawText == null ? 0 : rawText.length();
+                log.error("Failed to generate summary for docId={}, type={}, textLen={}", docId, type, textLen, ex);
                 documentSummaryRepository.save(new DocumentSummary(null, document, type, null, null, SummaryStatus.FAILED, LocalDateTime.now()));
                 document.setStatus(SummaryStatus.FAILED.name());
                 documentRepository.save(document);

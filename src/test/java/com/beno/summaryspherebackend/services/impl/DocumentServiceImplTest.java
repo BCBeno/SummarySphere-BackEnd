@@ -31,6 +31,9 @@ class DocumentServiceImplTest {
     DocumentRepository documentRepository;
 
     @Mock
+    com.beno.summaryspherebackend.repositories.DocumentSummaryRepository documentSummaryRepository;
+
+    @Mock
     BlobContainerClient blobContainerClient;
 
     @Mock
@@ -165,6 +168,7 @@ class DocumentServiceImplTest {
         String id = "present-id";
         Document doc = new Document(id, "title", "orig.pdf", 123L, ".pdf", "content", null);
         when(documentRepository.findById(id)).thenReturn(Optional.of(doc));
+        when(documentSummaryRepository.findAllByDocument(doc)).thenReturn(java.util.Collections.emptyList());
         BlobClient blobClient = mock(BlobClient.class);
         when(blobContainerClient.getBlobClient(id)).thenReturn(blobClient);
         when(blobClient.deleteIfExists()).thenReturn(true);
