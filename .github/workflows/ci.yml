@@ -47,6 +47,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Validate Heroku secrets
+        run: |
+          test -n "${{ secrets.HEROKU_API_KEY }}"
+          test -n "${{ secrets.HEROKU_APP_NAME }}"
+
       - name: Log in to Heroku Container Registry
         run: echo "${{ secrets.HEROKU_API_KEY }}" | docker login --username=_ --password-stdin registry.heroku.com
 
