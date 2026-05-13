@@ -32,10 +32,10 @@ public class GeminiServiceImpl implements GeminiService {
     private final BlobContainerClient blobContainerClient;
 
     public GeminiServiceImpl(ChatClient.Builder builder,
-                             DocumentSummaryRepository documentSummaryRepository,
-                             DocumentService documentService,
-                             DocumentRepository documentRepository,
-                             BlobContainerClient blobContainerClient) {
+            DocumentSummaryRepository documentSummaryRepository,
+            DocumentService documentService,
+            DocumentRepository documentRepository,
+            BlobContainerClient blobContainerClient) {
         this.documentSummaryRepository = documentSummaryRepository;
         this.documentService = documentService;
         this.documentRepository = documentRepository;
@@ -47,10 +47,10 @@ public class GeminiServiceImpl implements GeminiService {
     @Override
     public CompletableFuture<String> summarizeAsync(String docId, String type) {
         Document document = documentService.getDocumentById(docId)
-            .orElseThrow(() -> new IllegalArgumentException("Document with ID " + docId + " not found"));
+                .orElseThrow(() -> new IllegalArgumentException("Document with ID " + docId + " not found"));
         String rawText = document.getContent();
 
-        if(rawText == null || rawText.isEmpty()) {
+        if (rawText == null || rawText.isEmpty()) {
             throw new IllegalArgumentException("Text to summarize cannot be null or empty");
         }
 
@@ -59,44 +59,48 @@ public class GeminiServiceImpl implements GeminiService {
                 .filter(summary -> summary.getSummaryType().equalsIgnoreCase(type))
                 .findFirst()
                 .ifPresent(summary -> {
-                    throw new IllegalStateException("Summary of type '" + type + "' already exists for document ID: " + docId);
+                    throw new IllegalStateException(
+                            "Summary of type '" + type + "' already exists for document ID: " + docId);
                 });
 
         String prompt = """
-            You are a professional editor. 
-            Summarize the following text in a {type} style.
-            Do not use MARKUP languages or special characters.
-            Use the language of he document.
-            
-            TEXT TO SUMMARIZE:
-            {text}
-            """;
+                You are a professional editor.
+                Summarize the following text in a {type} style.
+                Do not use MARKUP languages or special characters.
+                Use the language of he document.
 
-            try {
-                int textLen = rawText == null ? 0 : rawText.length();
-                log.debug("Summarize request: docId={}, type={}, textLen={}", docId, type, textLen);
-                String result = chatClient.prompt()
+                TEXT TO SUMMARIZE:
+                {text}
+                """;
+
+        try {
+            int textLen = rawText == null ? 0 : rawText.length();
+            log.debug("Summarize request: docId={}, type={}, textLen={}", docId, type, textLen);
+            String result = chatClient.prompt()
                     .user(u -> u.text(prompt)
-                        .param("type", type)
-                        .param("text", rawText))
+                            .param("type", type)
+                            .param("text", rawText))
                     .call()
                     .content();
 
-                String blobName = buildSummaryBlobName(docId, type);
-                uploadSummaryText(blobName, result);
+            String blobName = buildSummaryBlobName(docId, type);
+            uploadSummaryText(blobName, result);
 
-                documentSummaryRepository.save(new DocumentSummary(null, document, type, result, blobName, SummaryStatus.COMPLETED, LocalDateTime.now()));
-                document.setStatus(SummaryStatus.COMPLETED.name());
-                documentRepository.save(document);
-                return CompletableFuture.completedFuture(result);
-            } catch (RuntimeException ex) {
-                int textLen = rawText == null ? 0 : rawText.length();
-                log.error("Failed to generate summary for docId={}, type={}, textLen={}", docId, type, textLen, ex);
-                documentSummaryRepository.save(new DocumentSummary(null, document, type, null, null, SummaryStatus.FAILED, LocalDateTime.now()));
-                document.setStatus(SummaryStatus.FAILED.name());
-                documentRepository.save(document);
-                return CompletableFuture.failedFuture(new IllegalStateException("Unable to generate the summary right now. Please verify the Gemini API key and try again.", ex));
-            }
+            documentSummaryRepository.save(new DocumentSummary(null, document, type, result, blobName,
+                    SummaryStatus.COMPLETED, LocalDateTime.now()));
+            document.setStatus(SummaryStatus.COMPLETED.name());
+            documentRepository.save(document);
+            return CompletableFuture.completedFuture(result);
+        } catch (RuntimeException ex) {
+            int textLen = rawText == null ? 0 : rawText.length();
+            log.error("Failed to generate summary for docId={}, type={}, textLen={}", docId, type, textLen, ex);
+            documentSummaryRepository.save(
+                    new DocumentSummary(null, document, type, null, null, SummaryStatus.FAILED, LocalDateTime.now()));
+            document.setStatus(SummaryStatus.FAILED.name());
+            documentRepository.save(document);
+            return CompletableFuture.failedFuture(new IllegalStateException(
+                    "Unable to generate the summary right now. Please verify the OpenRouter API key and try again.", ex));
+        }
     }
 
     private String buildSummaryBlobName(String documentId, String type) {
