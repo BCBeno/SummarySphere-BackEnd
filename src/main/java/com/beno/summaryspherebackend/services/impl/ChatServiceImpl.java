@@ -48,7 +48,7 @@ public class ChatServiceImpl implements ChatService {
         String systemContent = """
                 You are a helpful assistant. The user wants to discuss the following document with you.
                 Answer questions accurately and concisely based on the document content.
-                Do NOT use MarkDown, use only plain text. If you don't know the answer, say you don't know. Do NOT make up answers.
+                Do NOT use MarkDown or asterisks (**), use only plain text. If you don't know the answer, say you don't know. Do NOT make up answers.
 
                 DOCUMENT CONTENT:
                 """ + document.getContent();
@@ -69,6 +69,10 @@ public class ChatServiceImpl implements ChatService {
                 .messages(messages)
                 .call()
                 .content();
+
+        if (aiResponse != null) {
+            aiResponse = aiResponse.replaceAll("\\*\\*", "");
+        }
 
         chatMessageRepository.save(new ChatMessage(null, document, user, MessageRole.USER, message, LocalDateTime.now()));
         ChatMessage assistantMsg = chatMessageRepository.save(

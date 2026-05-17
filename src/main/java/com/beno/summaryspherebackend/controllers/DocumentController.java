@@ -8,9 +8,6 @@ import com.beno.summaryspherebackend.entities.User;
 import com.beno.summaryspherebackend.services.DocumentService;
 import com.beno.summaryspherebackend.services.DocumentSummaryService;
 import com.beno.summaryspherebackend.services.GeminiService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.core.io.Resource;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -25,14 +22,13 @@ import java.util.*;
 @RequestMapping("/api/documents")
 public class DocumentController {
 
-    private static final Logger log = LoggerFactory.getLogger(DocumentController.class);
     private final DocumentService documentService;
     private final ConvertToDto convertToDto;
-    private SummarizationSchema summarizationRecord;
     private GeminiService geminiService;
     private final DocumentSummaryService documentSummaryService;
 
-    public DocumentController(DocumentService documentService, ConvertToDto convertToDto, GeminiService geminiService, DocumentSummaryService documentSummaryService) {
+    public DocumentController(DocumentService documentService, ConvertToDto convertToDto, GeminiService geminiService,
+            DocumentSummaryService documentSummaryService) {
         this.geminiService = geminiService;
         this.documentService = documentService;
         this.convertToDto = convertToDto;
@@ -44,20 +40,20 @@ public class DocumentController {
     public ResponseEntity<String> uploadFile(
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "title", required = false) String title,
-            @AuthenticationPrincipal User currentUser
-    ) {
+            @AuthenticationPrincipal User currentUser) {
         String originalFileName = Objects.requireNonNull(file.getOriginalFilename());
         try {
-             String id = documentService.storeFile(file, title, currentUser);
+            String id = documentService.storeFile(file, title, currentUser);
 
-             HashMap<String, String> message = new HashMap<>();
-             message.put("message", "Document uploaded successfully");
-             message.put("id", id);
+            HashMap<String, String> message = new HashMap<>();
+            message.put("message", "Document uploaded successfully");
+            message.put("id", id);
             return ResponseEntity.ok(message.toString());
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.badRequest().body("There was an error uploading the file: " + ex.getMessage());
         } catch (IOException ex) {
-            return ResponseEntity.internalServerError().body("Could not store file " + originalFileName + ". Please try again!");
+            return ResponseEntity.internalServerError()
+                    .body("Could not store file " + originalFileName + ". Please try again!");
         }
     }
 
@@ -81,7 +77,6 @@ public class DocumentController {
 
         return ResponseEntity.ok(convertToDto.convertDocumentToDto(doc));
     }
-
 
     @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     @DeleteMapping("/{id}")
@@ -124,7 +119,9 @@ public class DocumentController {
 
     @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     @PostMapping("/{id}/summarize")
-    public ResponseEntity<?> summarizeDocument(@PathVariable String id, @RequestBody SummarizationSchema.SummarizeRequest summarizeRequest, @AuthenticationPrincipal User currentUser) {
+    public ResponseEntity<?> summarizeDocument(@PathVariable String id,
+            @RequestBody SummarizationSchema.SummarizeRequest summarizeRequest,
+            @AuthenticationPrincipal User currentUser) {
         Optional<Document> docOpt = documentService.getDocumentById(id);
         if (docOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -134,19 +131,19 @@ public class DocumentController {
         }
 
         try {
-            // geminiService now returns CompletableFuture<String> (async). Block for now to keep controller simple.
             String summary = geminiService.summarizeAsync(id, summarizeRequest.summaryType()).join();
             SummarizationSchema.SummarizeResponse response = new SummarizationSchema.SummarizeResponse(summary, id);
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.badRequest().body("There was an error summarizing the document: " + ex.getMessage());
         } catch (java.util.concurrent.CompletionException ex) {
-            // unwrap the cause for clearer messaging
             Throwable cause = ex.getCause();
             if (cause instanceof IllegalStateException) {
-                return ResponseEntity.status(503).body("There was an error summarizing the document: " + cause.getMessage());
+                return ResponseEntity.status(503)
+                        .body("There was an error summarizing the document: " + cause.getMessage());
             }
-            return ResponseEntity.status(500).body("There was an unexpected error summarizing the document: " + cause.getMessage());
+            return ResponseEntity.status(500)
+                    .body("There was an unexpected error summarizing the document: " + cause.getMessage());
         } catch (IllegalStateException ex) {
             return ResponseEntity.status(503).body("There was an error summarizing the document: " + ex.getMessage());
         }
@@ -182,8 +179,7 @@ public class DocumentController {
     public ResponseEntity<?> getSummaryByType(
             @PathVariable String id,
             @PathVariable String summaryType,
-            @AuthenticationPrincipal User currentUser
-    ) {
+            @AuthenticationPrincipal User currentUser) {
         Optional<Document> docOpt = documentService.getDocumentById(id);
         if (docOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -192,7 +188,8 @@ public class DocumentController {
             return ResponseEntity.status(403).body("You are not authorized to view this document's summaries.");
         }
 
-        Optional<DocumentSummary> summaryOpt = documentSummaryService.getLatestSummaryForDocumentByType(id, summaryType);
+        Optional<DocumentSummary> summaryOpt = documentSummaryService.getLatestSummaryForDocumentByType(id,
+                summaryType);
         if (summaryOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
@@ -233,10 +230,12 @@ public class DocumentController {
     }
 
     private boolean isOwner(Document doc, User currentUser) {
-        if (doc == null || currentUser == null) return false;
+        if (doc == null || currentUser == null)
+            return false;
         try {
             User owner = doc.getUploadedBy();
-            if (owner == null) return false;
+            if (owner == null)
+                return false;
             return Objects.equals(owner.getId(), currentUser.getId());
         } catch (NoSuchMethodError | NoSuchFieldError e) {
             return false;

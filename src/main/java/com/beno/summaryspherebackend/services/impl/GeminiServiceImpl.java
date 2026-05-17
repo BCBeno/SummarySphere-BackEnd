@@ -66,8 +66,8 @@ public class GeminiServiceImpl implements GeminiService {
         String prompt = """
                 You are a professional editor.
                 Summarize the following text in a {type} style.
-                Do not use MARKUP languages or special characters.
-                Use the language of he document.
+                Do not use MARKUP languages, asterisks (**), or special characters.
+                Use the language of the document.
 
                 TEXT TO SUMMARIZE:
                 {text}
@@ -82,6 +82,10 @@ public class GeminiServiceImpl implements GeminiService {
                             .param("text", rawText))
                     .call()
                     .content();
+
+            if (result != null) {
+                result = result.replaceAll("\\*\\*", "");
+            }
 
             String blobName = buildSummaryBlobName(docId, type);
             uploadSummaryText(blobName, result);
