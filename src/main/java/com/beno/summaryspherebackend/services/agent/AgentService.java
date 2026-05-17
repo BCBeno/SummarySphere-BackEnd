@@ -126,6 +126,7 @@ public class AgentService {
             log.warn("Agent returned an empty or null response for conversationId={}", conversation.getId());
             aiResponse = "I'm sorry, I couldn't generate a proper response. (The AI returned an empty message).";
         } else {
+            aiResponse = aiResponse.replaceAll("(?s)<think>.*?</think>\\s*", "");
             aiResponse = aiResponse.replaceAll("\\*\\*", "");
         }
 

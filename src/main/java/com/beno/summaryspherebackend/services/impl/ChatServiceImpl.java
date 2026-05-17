@@ -71,6 +71,7 @@ public class ChatServiceImpl implements ChatService {
                 .content();
 
         if (aiResponse != null) {
+            aiResponse = aiResponse.replaceAll("(?s)<think>.*?</think>\\s*", "");
             aiResponse = aiResponse.replaceAll("\\*\\*", "");
         }
 

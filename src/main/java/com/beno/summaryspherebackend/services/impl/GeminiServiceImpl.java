@@ -84,6 +84,7 @@ public class GeminiServiceImpl implements GeminiService {
                     .content();
 
             if (result != null) {
+                result = result.replaceAll("(?s)<think>.*?</think>\\s*", "");
                 result = result.replaceAll("\\*\\*", "");
             }
 
