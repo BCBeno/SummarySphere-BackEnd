@@ -53,7 +53,7 @@ public class TestConfig {
     @Bean
     @Primary
     public ChatClient.Builder testChatClientBuilder() {
-        // Mock the ChatClient.Builder so GeminiServiceImpl can be constructed during tests without the real client
+        // Mock the ChatClient.Builder so AIServiceImpl can be constructed during tests without the real client
         return mock(ChatClient.Builder.class);
     }
 

@@ -7,7 +7,7 @@ import com.beno.summaryspherebackend.entities.DocumentSummary;
 import com.beno.summaryspherebackend.enums.SummaryStatus;
 import com.beno.summaryspherebackend.repositories.DocumentRepository;
 import com.beno.summaryspherebackend.repositories.DocumentSummaryRepository;
-import com.beno.summaryspherebackend.services.GeminiService;
+import com.beno.summaryspherebackend.services.AIService;
 import com.beno.summaryspherebackend.services.DocumentService;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.scheduling.annotation.Async;
@@ -23,15 +23,15 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 @Service
-public class GeminiServiceImpl implements GeminiService {
-    private static final Logger log = LoggerFactory.getLogger(GeminiServiceImpl.class);
+public class AIServiceImpl implements AIService {
+    private static final Logger log = LoggerFactory.getLogger(AIServiceImpl.class);
     private final ChatClient chatClient;
     private final DocumentSummaryRepository documentSummaryRepository;
     private final DocumentService documentService;
     private final DocumentRepository documentRepository;
     private final BlobContainerClient blobContainerClient;
 
-    public GeminiServiceImpl(ChatClient.Builder builder,
+    public AIServiceImpl(ChatClient.Builder builder,
             DocumentSummaryRepository documentSummaryRepository,
             DocumentService documentService,
             DocumentRepository documentRepository,
@@ -55,13 +55,23 @@ public class GeminiServiceImpl implements GeminiService {
         }
 
         List<DocumentSummary> existingSummaries = documentSummaryRepository.findAllByDocument(document);
-        existingSummaries.stream()
+        boolean hasActiveSummary = existingSummaries.stream()
                 .filter(summary -> summary.getSummaryType().equalsIgnoreCase(type))
-                .findFirst()
-                .ifPresent(summary -> {
-                    throw new IllegalStateException(
-                            "Summary of type '" + type + "' already exists for document ID: " + docId);
-                });
+                .anyMatch(summary -> summary.getStatus() != SummaryStatus.FAILED);
+
+        if (hasActiveSummary) {
+            throw new IllegalStateException(
+                    "Summary of type '" + type + "' already exists for document ID: " + docId);
+        }
+
+        // Clean up any failed summaries of this type to avoid cluttering the database
+        List<DocumentSummary> failedSummaries = existingSummaries.stream()
+                .filter(summary -> summary.getSummaryType().equalsIgnoreCase(type)
+                        && summary.getStatus() == SummaryStatus.FAILED)
+                .toList();
+        if (!failedSummaries.isEmpty()) {
+            documentSummaryRepository.deleteAll(failedSummaries);
+        }
 
         String prompt = """
                 You are a professional editor.
@@ -104,7 +114,8 @@ public class GeminiServiceImpl implements GeminiService {
             document.setStatus(SummaryStatus.FAILED.name());
             documentRepository.save(document);
             return CompletableFuture.failedFuture(new IllegalStateException(
-                    "Unable to generate the summary right now. Please verify the OpenRouter API key and try again.", ex));
+                    "Unable to generate the summary right now. Please verify the OpenRouter API key and try again.",
+                    ex));
         }
     }
 

@@ -7,7 +7,7 @@ import com.beno.summaryspherebackend.entities.DocumentSummary;
 import com.beno.summaryspherebackend.entities.User;
 import com.beno.summaryspherebackend.services.DocumentService;
 import com.beno.summaryspherebackend.services.DocumentSummaryService;
-import com.beno.summaryspherebackend.services.GeminiService;
+import com.beno.summaryspherebackend.services.AIService;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -24,12 +24,12 @@ public class DocumentController {
 
     private final DocumentService documentService;
     private final ConvertToDto convertToDto;
-    private GeminiService geminiService;
+    private final AIService aiService;
     private final DocumentSummaryService documentSummaryService;
 
-    public DocumentController(DocumentService documentService, ConvertToDto convertToDto, GeminiService geminiService,
+    public DocumentController(DocumentService documentService, ConvertToDto convertToDto, AIService aiService,
             DocumentSummaryService documentSummaryService) {
-        this.geminiService = geminiService;
+        this.aiService = aiService;
         this.documentService = documentService;
         this.convertToDto = convertToDto;
         this.documentSummaryService = documentSummaryService;
@@ -131,7 +131,7 @@ public class DocumentController {
         }
 
         try {
-            String summary = geminiService.summarizeAsync(id, summarizeRequest.summaryType()).join();
+            String summary = aiService.summarizeAsync(id, summarizeRequest.summaryType()).join();
             SummarizationSchema.SummarizeResponse response = new SummarizationSchema.SummarizeResponse(summary, id);
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException ex) {
