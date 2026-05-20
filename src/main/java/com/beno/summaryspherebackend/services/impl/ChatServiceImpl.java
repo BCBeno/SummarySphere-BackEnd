@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 @Service
@@ -43,7 +44,9 @@ public class ChatServiceImpl implements ChatService {
             throw new IllegalArgumentException("Document has no extracted content to chat about.");
         }
 
-        List<ChatMessage> history = chatMessageRepository.findAllByDocumentAndUserOrderByCreatedAtAsc(document, user);
+        List<ChatMessage> recentMessages = chatMessageRepository.findTop10ByDocumentAndUserOrderByCreatedAtDesc(document, user);
+        List<ChatMessage> history = new ArrayList<>(recentMessages);
+        Collections.reverse(history);
 
         String systemContent = """
                 You are a helpful assistant. The user wants to discuss the following document with you.

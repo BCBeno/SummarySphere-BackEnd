@@ -9,5 +9,6 @@ import java.util.List;
 
 public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> {
     List<ChatMessage> findAllByDocumentAndUserOrderByCreatedAtAsc(Document document, User user);
+    List<ChatMessage> findTop10ByDocumentAndUserOrderByCreatedAtDesc(Document document, User user);
     void deleteAllByDocumentAndUser(Document document, User user);
 }

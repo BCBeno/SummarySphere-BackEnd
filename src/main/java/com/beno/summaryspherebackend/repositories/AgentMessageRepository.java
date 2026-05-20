@@ -10,5 +10,6 @@ import java.util.List;
 @Repository
 public interface AgentMessageRepository extends JpaRepository<AgentMessage, Long> {
     List<AgentMessage> findAllByConversationOrderByCreatedAtAsc(AgentConversation conversation);
+    List<AgentMessage> findTop10ByConversationOrderByCreatedAtDesc(AgentConversation conversation);
     void deleteAllByConversation(AgentConversation conversation);
 }

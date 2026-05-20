@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -109,7 +110,9 @@ public class AgentService {
         AgentMessage userMsg = new AgentMessage(conversation, AgentMessageRole.USER, userMessage);
         messageRepository.save(userMsg);
 
-        List<AgentMessage> history = messageRepository.findAllByConversationOrderByCreatedAtAsc(conversation);
+        List<AgentMessage> recentMessages = messageRepository.findTop10ByConversationOrderByCreatedAtDesc(conversation);
+        List<AgentMessage> history = new ArrayList<>(recentMessages);
+        Collections.reverse(history);
         List<Message> messages = buildMessageHistory(history);
 
         String aiResponse;
