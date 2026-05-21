@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayInputStream;
@@ -40,9 +41,9 @@ public class DocumentServiceImpl implements DocumentService {
     private final DocumentVectorService documentVectorService;
 
     public DocumentServiceImpl(DocumentRepository documentRepository, ConvertToDto convertToDto,
-                               FileExtractionService fileExtractionService, BlobContainerClient blobContainerClient,
-                               DocumentSummaryRepository documentSummaryRepository,
-                               DocumentVectorService documentVectorService) {
+            FileExtractionService fileExtractionService, BlobContainerClient blobContainerClient,
+            DocumentSummaryRepository documentSummaryRepository,
+            DocumentVectorService documentVectorService) {
         this.fileExtractionService = fileExtractionService;
         this.documentRepository = documentRepository;
         this.convertToDto = convertToDto;
@@ -57,7 +58,7 @@ public class DocumentServiceImpl implements DocumentService {
         String originalFileName = Objects.requireNonNull(file.getOriginalFilename());
         String docTitle = (title != null && !title.trim().isEmpty()) ? title : originalFileName;
 
-        if(file.getSize() > 25 * 1024 * 1024) {
+        if (file.getSize() > 25 * 1024 * 1024) {
             throw new IllegalArgumentException("File size exceeds the maximum limit of 25MB");
         }
 
@@ -90,7 +91,8 @@ public class DocumentServiceImpl implements DocumentService {
         String contentBlobName = buildContentBlobName(uniqueFileName);
         uploadTextBlob(contentBlobName, content);
 
-        Document document = new Document(uniqueFileName, docTitle, originalFileName, (long)bytes.length, fileExtension, null, uploader);
+        Document document = new Document(uniqueFileName, docTitle, originalFileName, (long) bytes.length, fileExtension,
+                null, uploader);
         document.setContentBlobName(contentBlobName);
         documentRepository.save(document);
 
@@ -98,7 +100,8 @@ public class DocumentServiceImpl implements DocumentService {
         try {
             documentVectorService.ingestDocument(uniqueFileName, content);
         } catch (Exception e) {
-            log.warn("Failed to generate vector embeddings for document {}. Chat will use full content fallback.", uniqueFileName, e);
+            log.warn("Failed to generate vector embeddings for document {}. Chat will use full content fallback.",
+                    uniqueFileName, e);
         }
 
         return uniqueFileName;
@@ -125,6 +128,7 @@ public class DocumentServiceImpl implements DocumentService {
     }
 
     @Override
+    @Transactional
     public void deleteFile(String id) {
         Optional<Document> documentOpt = documentRepository.findById(id);
         if (documentOpt.isEmpty()) {
@@ -184,7 +188,6 @@ public class DocumentServiceImpl implements DocumentService {
 
         return blobClient.getBlobUrl() + "?" + blobClient.generateSas(values);
     }
-
 
     @Override
     public void deleteFilesByUser(User user) {
