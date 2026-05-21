@@ -153,7 +153,7 @@ public class DocumentServiceImpl implements DocumentService {
             blobContainerClient.getBlobClient(document.getContentBlobName()).deleteIfExists();
         }
 
-        // delete any summary blobs and DB records
+        // delete any summary blobs from Azure Storage
         try {
             var summaries = documentSummaryRepository.findAllByDocument(document);
             for (var summary : summaries) {
@@ -161,14 +161,13 @@ public class DocumentServiceImpl implements DocumentService {
                     blobContainerClient.getBlobClient(summary.getSummaryBlobName()).deleteIfExists();
                 }
             }
-            if (!summaries.isEmpty()) {
-                documentSummaryRepository.deleteAll(summaries);
-            }
         } catch (Exception ex) {
-            // swallow to avoid partial delete; caller can handle if needed
+            log.warn("Failed to delete summary blobs for document {}", id, ex);
         }
 
-        documentRepository.deleteById(id);
+        // Delete the document. CascadeType.ALL on 'summaries' and 'chatMessages'
+        // will automatically delete associated database rows.
+        documentRepository.delete(document);
     }
 
     @Override
@@ -190,6 +189,7 @@ public class DocumentServiceImpl implements DocumentService {
     }
 
     @Override
+    @Transactional
     public void deleteFilesByUser(User user) {
         List<Document> userFileList = documentRepository.findByUploadedBy(user);
         for (Document doc : userFileList) {
@@ -212,9 +212,6 @@ public class DocumentServiceImpl implements DocumentService {
                     if (summary.getSummaryBlobName() != null && !summary.getSummaryBlobName().isBlank()) {
                         blobContainerClient.getBlobClient(summary.getSummaryBlobName()).deleteIfExists();
                     }
-                }
-                if (!summaries.isEmpty()) {
-                    documentSummaryRepository.deleteAll(summaries);
                 }
             } catch (Exception ex) {
                 // ignore and continue with next document

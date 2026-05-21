@@ -178,6 +178,6 @@ class DocumentServiceImplTest {
 
         // Assert
         verify(blobClient, times(1)).deleteIfExists();
-        verify(documentRepository, times(1)).deleteById(id);
+        verify(documentRepository, times(1)).delete(doc);
     }
 }
