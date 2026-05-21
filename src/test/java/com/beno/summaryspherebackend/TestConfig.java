@@ -8,6 +8,8 @@ import org.springframework.mail.javamail.JavaMailSender;
 import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.BlobContainerClient;
 import org.springframework.ai.chat.client.ChatClient;
+import com.beno.summaryspherebackend.services.DocumentVectorService;
+import org.springframework.ai.vectorstore.VectorStore;
 
 import static org.mockito.Mockito.*;
 import org.mockito.ArgumentMatchers;
@@ -62,5 +64,19 @@ public class TestConfig {
     public ChatClient testChatClient() {
         // Mock ChatClient as well in case any code autowires it directly
         return mock(ChatClient.class);
+    }
+
+    @Bean
+    @Primary
+    public DocumentVectorService testDocumentVectorService() {
+        // Provide a mock DocumentVectorService so test context starts without a real vector store
+        return mock(DocumentVectorService.class);
+    }
+
+    @Bean
+    @Primary
+    public VectorStore testVectorStore() {
+        // Provide a mock VectorStore so the context can start without pgvector
+        return mock(VectorStore.class);
     }
 }

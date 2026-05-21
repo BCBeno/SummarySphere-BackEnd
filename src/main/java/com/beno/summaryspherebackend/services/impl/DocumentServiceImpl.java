@@ -11,7 +11,10 @@ import com.beno.summaryspherebackend.entities.User;
 import com.beno.summaryspherebackend.repositories.DocumentRepository;
 import com.beno.summaryspherebackend.repositories.DocumentSummaryRepository;
 import com.beno.summaryspherebackend.services.DocumentService;
+import com.beno.summaryspherebackend.services.DocumentVectorService;
 import com.beno.summaryspherebackend.services.FileExtractionService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
@@ -27,21 +30,25 @@ import java.util.*;
 @Service
 public class DocumentServiceImpl implements DocumentService {
 
+    private static final Logger log = LoggerFactory.getLogger(DocumentServiceImpl.class);
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(".pdf", ".docx", ".txt");
     private final DocumentRepository documentRepository;
     private final ConvertToDto convertToDto;
     private final FileExtractionService fileExtractionService;
     private final BlobContainerClient blobContainerClient;
     private final DocumentSummaryRepository documentSummaryRepository;
+    private final DocumentVectorService documentVectorService;
 
     public DocumentServiceImpl(DocumentRepository documentRepository, ConvertToDto convertToDto,
                                FileExtractionService fileExtractionService, BlobContainerClient blobContainerClient,
-                               DocumentSummaryRepository documentSummaryRepository) {
+                               DocumentSummaryRepository documentSummaryRepository,
+                               DocumentVectorService documentVectorService) {
         this.fileExtractionService = fileExtractionService;
         this.documentRepository = documentRepository;
         this.convertToDto = convertToDto;
         this.blobContainerClient = blobContainerClient;
         this.documentSummaryRepository = documentSummaryRepository;
+        this.documentVectorService = documentVectorService;
     }
 
     @Override
@@ -86,6 +93,14 @@ public class DocumentServiceImpl implements DocumentService {
         Document document = new Document(uniqueFileName, docTitle, originalFileName, (long)bytes.length, fileExtension, null, uploader);
         document.setContentBlobName(contentBlobName);
         documentRepository.save(document);
+
+        // Chunk and embed the document content for RAG-based chat
+        try {
+            documentVectorService.ingestDocument(uniqueFileName, content);
+        } catch (Exception e) {
+            log.warn("Failed to generate vector embeddings for document {}. Chat will use full content fallback.", uniqueFileName, e);
+        }
+
         return uniqueFileName;
     }
 
@@ -117,6 +132,13 @@ public class DocumentServiceImpl implements DocumentService {
         }
 
         Document document = documentOpt.get();
+
+        // delete vector store chunks
+        try {
+            documentVectorService.deleteDocumentChunks(id);
+        } catch (Exception e) {
+            log.warn("Failed to delete vector chunks for document {}", id, e);
+        }
 
         // delete main blob
         BlobClient blobClient = blobContainerClient.getBlobClient(id);
@@ -168,6 +190,13 @@ public class DocumentServiceImpl implements DocumentService {
     public void deleteFilesByUser(User user) {
         List<Document> userFileList = documentRepository.findByUploadedBy(user);
         for (Document doc : userFileList) {
+            // delete vector store chunks
+            try {
+                documentVectorService.deleteDocumentChunks(doc.getDocumentId());
+            } catch (Exception e) {
+                log.warn("Failed to delete vector chunks for document {}", doc.getDocumentId(), e);
+            }
+
             BlobClient blobClient = blobContainerClient.getBlobClient(doc.getDocumentId());
             blobClient.deleteIfExists();
             if (doc.getContentBlobName() != null && !doc.getContentBlobName().isBlank()) {
