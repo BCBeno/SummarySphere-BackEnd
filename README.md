@@ -145,6 +145,8 @@ Once the backend is running, the interactive Swagger UI is available at:
 
 ## 👥 Maintained & Developed By
 
+You're currently looking at the front-end code. Click [here](https://github.com/BCBeno/SummarySphere-BackEnd) to see the back-end repository.
+
 The repository is maintained and developed by:
 
 <p align="left">
