@@ -1,6 +1,6 @@
 # SummarySphere (AI Course Summarizer - Backend)
 
-A Spring Boot-based microservice for AI-powered course summarization. It allows students to upload documents (PDF, Word, or Text), parses their content using Apache Tika, persists them in Azure Blob Storage, and generates structured summaries using Google's Gemini AI via Spring AI.
+A Spring Boot-based microservice for AI-powered course summarization. It allows students to upload documents (PDF, Word, or Text), parses their content using Apache Tika, persists them in Azure Blob Storage, and generates summaries using Google's Gemini AI via Spring AI.
 
 The application also features an interactive document-specific chat (Retrieval-Augmented Generation / RAG) utilizing pgvector as a vector store, as well as a general AI chat assistant.
 
@@ -8,14 +8,20 @@ The application also features an interactive document-specific chat (Retrieval-A
 
 ## 📸 Screenshots
 
-![Landing Page](./assets/landing.png)
+![Landing Page](./assets/LandingPage.png)
 *Landing page of the application.*
 
 ![The Archive Dashboard](./assets/dashboard.png)
 *Personal dashboard for uploading, managing, and summarizing scrolls.*
 
-![Document Chat](./assets/chat.png)
+![Document Upload](./assets/upload.png)
+*Document upload interface.*
+
+![Document Chat](./assets/SummaryRagChat.png)
 *Interactive chat session focusing on a specific document using RAG.*
+
+![Agent Chat](./assets/AgentChat.png)
+*General AI assistant chat for study-related queries.*
 
 ---
 
@@ -161,4 +167,10 @@ The repository is maintained and developed by:
   <img src="https://raw.githubusercontent.com/adelinprelipcean/study-summarizer/main/assets/logo_assist.png" alt="ASSIST Academy Logo" height="70" />
 </p>
 
-This project was developed as part of the **DUAL-USV** educational program. The practical implementation and full-stack development phases were carried out under the guidance and framework of the **`<ASSIST Academy/>`**.
+This project was developed as part of the **DUAL-USV** educational program. The practical implementation and full-stack development phases were carried out under the guidance and framework of the **ASSIST Academy**.
+
+---
+
+## 📜 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
