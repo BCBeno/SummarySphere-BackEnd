@@ -12,7 +12,7 @@ The application also features an interactive document-specific chat (Retrieval-A
 *Landing page of the application.*
 
 ![The Archive Dashboard](./assets/dashboard.png)
-*Personal dashboard for uploading, managing, and summarizing scrolls.*
+*Personal dashboard for uploading, managing, and summarizing documents.*
 
 ![Document Upload](./assets/upload.png)
 *Document upload interface.*
