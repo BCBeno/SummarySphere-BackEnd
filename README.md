@@ -145,6 +145,8 @@ Once the backend is running, the interactive Swagger UI is available at:
 
 ## 👥 Maintained & Developed By
 
+You're currently looking at the back-end code. Click [here](https://github.com/Rbt-Ghost/SummarySphere-Frontend) to see the front-end repository.
+
 The repository is maintained and developed by:
 
 <p align="left">
