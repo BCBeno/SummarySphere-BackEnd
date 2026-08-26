@@ -17,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.Optional;
 
@@ -51,11 +52,12 @@ class DocumentServiceImplTest {
         // Arrange
         MultipartFile file = mock(MultipartFile.class);
         byte[] contentBytes = "hello world".getBytes();
-        when(file.getBytes()).thenReturn(contentBytes);
+        when(file.getInputStream())
+            .thenReturn(new ByteArrayInputStream(contentBytes), new ByteArrayInputStream(contentBytes));
         when(file.getOriginalFilename()).thenReturn("test.pdf");
         when(file.getSize()).thenReturn((long) contentBytes.length);
 
-        when(fileExtractionService.extractTextFromBytes(contentBytes)).thenReturn("extracted text");
+        when(fileExtractionService.extractText(any(InputStream.class))).thenReturn("extracted text");
 
         BlobClient blobClient = mock(BlobClient.class);
         when(blobContainerClient.getBlobClient(anyString())).thenReturn(blobClient);

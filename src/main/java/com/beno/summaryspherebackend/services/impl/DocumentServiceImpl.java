@@ -24,6 +24,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.util.*;
@@ -54,11 +55,11 @@ public class DocumentServiceImpl implements DocumentService {
 
     @Override
     public String storeFile(MultipartFile file, String title, User uploader) throws IOException {
-        byte[] bytes = file.getBytes(); // COST MARE DE MEMORIE. De rezolvat în viitor.
         String originalFileName = Objects.requireNonNull(file.getOriginalFilename());
         String docTitle = (title != null && !title.trim().isEmpty()) ? title : originalFileName;
+        long fileSize = file.getSize();
 
-        if (file.getSize() > 25 * 1024 * 1024) {
+        if (fileSize > 25 * 1024 * 1024) {
             throw new IllegalArgumentException("File size exceeds the maximum limit of 25MB");
         }
 
@@ -77,21 +78,21 @@ public class DocumentServiceImpl implements DocumentService {
         String uniqueFileName = UUID.randomUUID() + fileExtension;
 
         String content;
-        try {
-            content = fileExtractionService.extractTextFromBytes(bytes);
+        try (InputStream extractionStream = file.getInputStream()) {
+            content = fileExtractionService.extractText(extractionStream);
         } catch (Exception e) {
             throw new IllegalArgumentException("Extraction failed: " + e.getMessage());
         }
 
         BlobClient blobClient = blobContainerClient.getBlobClient(uniqueFileName);
-        try (ByteArrayInputStream dataStream = new ByteArrayInputStream(bytes)) {
-            blobClient.upload(dataStream, bytes.length, true);
+        try (InputStream uploadStream = file.getInputStream()) {
+            blobClient.upload(uploadStream, fileSize, true);
         }
 
         String contentBlobName = buildContentBlobName(uniqueFileName);
         uploadTextBlob(contentBlobName, content);
 
-        Document document = new Document(uniqueFileName, docTitle, originalFileName, (long) bytes.length, fileExtension,
+        Document document = new Document(uniqueFileName, docTitle, originalFileName, fileSize, fileExtension,
                 null, uploader);
         document.setContentBlobName(contentBlobName);
         documentRepository.save(document);
