@@ -218,7 +218,7 @@ public class AgentTools {
         }
 
         try {
-            String summary = aiService.summarizeAsync(documentId, summaryType).join();
+            String summary = aiService.summarizeAsync(documentId, summaryType, user).join();
             return "Successfully generated '" + summaryType + "' summary for '" + docOpt.get().getTitle() + "':\n\n"
                     + summary;
         } catch (Exception ex) {

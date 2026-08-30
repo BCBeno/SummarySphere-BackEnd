@@ -4,11 +4,13 @@ import com.azure.storage.blob.BlobClient;
 import com.azure.storage.blob.BlobContainerClient;
 import com.beno.summaryspherebackend.entities.Document;
 import com.beno.summaryspherebackend.entities.DocumentSummary;
+import com.beno.summaryspherebackend.entities.User;
 import com.beno.summaryspherebackend.enums.SummaryStatus;
 import com.beno.summaryspherebackend.repositories.DocumentRepository;
 import com.beno.summaryspherebackend.repositories.DocumentSummaryRepository;
 import com.beno.summaryspherebackend.services.AIService;
 import com.beno.summaryspherebackend.services.DocumentService;
+import com.beno.summaryspherebackend.services.RateLimitService;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -30,22 +32,35 @@ public class AIServiceImpl implements AIService {
     private final DocumentService documentService;
     private final DocumentRepository documentRepository;
     private final BlobContainerClient blobContainerClient;
+    private final RateLimitService rateLimitService;
 
     public AIServiceImpl(ChatClient.Builder builder,
             DocumentSummaryRepository documentSummaryRepository,
             DocumentService documentService,
             DocumentRepository documentRepository,
-            BlobContainerClient blobContainerClient) {
+            BlobContainerClient blobContainerClient,
+            RateLimitService rateLimitService) {
         this.documentSummaryRepository = documentSummaryRepository;
         this.documentService = documentService;
         this.documentRepository = documentRepository;
         this.blobContainerClient = blobContainerClient;
+        this.rateLimitService = rateLimitService;
         this.chatClient = builder.build();
     }
 
     @Async
     @Override
     public CompletableFuture<String> summarizeAsync(String docId, String type) {
+        return summarizeAsync(docId, type, null);
+    }
+
+    @Async
+    @Override
+    public CompletableFuture<String> summarizeAsync(String docId, String type, User user) {
+        if (user == null || user.getId() == null) {
+            throw new IllegalArgumentException("Authenticated user is required for summarization");
+        }
+        rateLimitService.checkSummarization(user.getId().toString());
         Document document = documentService.getDocumentById(docId)
                 .orElseThrow(() -> new IllegalArgumentException("Document with ID " + docId + " not found"));
         String rawText = document.getContent();

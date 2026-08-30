@@ -23,8 +23,16 @@ public class AuthService {
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
     private final EmailService emailService;
+    private final RateLimitService rateLimitService;
 
     public AuthSchema.AuthResponse register(AuthSchema.RegisterRequest request) {
+        return register(request, "unknown");
+    }
+
+    public AuthSchema.AuthResponse register(AuthSchema.RegisterRequest request, String ip) {
+        if (rateLimitService != null) {
+            rateLimitService.checkRegistration(ip);
+        }
         if (userRepository.existsByEmail(request.email())) {
             throw new IllegalArgumentException("Email already in use: " + request.email());
         }
@@ -43,6 +51,13 @@ public class AuthService {
     }
 
     public AuthSchema.AuthResponse login(AuthSchema.LoginRequest request) {
+        return login(request, "unknown");
+    }
+
+    public AuthSchema.AuthResponse login(AuthSchema.LoginRequest request, String ip) {
+        if (rateLimitService != null) {
+            rateLimitService.checkLogin(ip);
+        }
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.email(), request.password())
         );
@@ -56,6 +71,13 @@ public class AuthService {
 
 
     public void forgotPassword(String email) {
+        forgotPassword(email, "unknown");
+    }
+
+    public void forgotPassword(String email, String ip) {
+        if (rateLimitService != null) {
+            rateLimitService.checkForgotPassword(email, ip);
+        }
         try {
             var user = userRepository.findByEmail(email);
             if (user.isEmpty()) {

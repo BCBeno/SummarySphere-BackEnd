@@ -131,7 +131,7 @@ public class DocumentController {
         }
 
         try {
-            String summary = aiService.summarizeAsync(id, summarizeRequest.summaryType()).join();
+            String summary = aiService.summarizeAsync(id, summarizeRequest.summaryType(), currentUser).join();
             SummarizationSchema.SummarizeResponse response = new SummarizationSchema.SummarizeResponse(summary, id);
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException ex) {
