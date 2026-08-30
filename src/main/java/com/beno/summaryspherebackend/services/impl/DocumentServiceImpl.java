@@ -13,6 +13,7 @@ import com.beno.summaryspherebackend.repositories.DocumentSummaryRepository;
 import com.beno.summaryspherebackend.services.DocumentService;
 import com.beno.summaryspherebackend.services.DocumentVectorService;
 import com.beno.summaryspherebackend.services.FileExtractionService;
+import org.apache.tika.Tika;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ByteArrayResource;
@@ -34,6 +35,12 @@ public class DocumentServiceImpl implements DocumentService {
 
     private static final Logger log = LoggerFactory.getLogger(DocumentServiceImpl.class);
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(".pdf", ".docx", ".txt");
+    private static final Set<String> ALLOWED_MEDIA_TYPES = Set.of(
+            "application/pdf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "text/plain"
+    );
+    private final Tika tika = new Tika();
     private final DocumentRepository documentRepository;
     private final ConvertToDto convertToDto;
     private final FileExtractionService fileExtractionService;
@@ -73,6 +80,13 @@ public class DocumentServiceImpl implements DocumentService {
 
         if (!ALLOWED_EXTENSIONS.contains(fileExtension)) {
             throw new IllegalArgumentException("Invalid file type. Allowed types: txt, pdf, docx");
+        }
+
+        try (InputStream inputStream = file.getInputStream()) {
+            String detectedType = tika.detect(inputStream, originalFileName);
+            if (detectedType == null || !ALLOWED_MEDIA_TYPES.contains(detectedType.toLowerCase(Locale.ROOT))) {
+                throw new IllegalArgumentException("Unsupported or invalid file content");
+            }
         }
 
         String uniqueFileName = UUID.randomUUID() + fileExtension;
