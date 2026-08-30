@@ -71,6 +71,73 @@ public class EmailServiceImpl implements EmailService {
         }
     }
 
+    @Override
+    @Async("asyncExecutor")
+    public CompletableFuture<Void> sendEmailVerificationEmail(String email, String token) {
+        try {
+            if (resendApiKey == null || resendApiKey.isBlank()) {
+                throw new IllegalStateException(
+                        "Resend API key is missing. Set RESEND_API_KEY in environment variables.");
+            }
+
+            String verificationLink = frontendBaseUrl + "/verify-email?token=" + token;
+            Map<String, Object> requestBody = Map.of(
+                    "from", resendFromEmail,
+                    "to", List.of(email),
+                    "subject", "SummarySphere - Verify your email",
+                    "html", buildEmailVerificationHTML(verificationLink));
+
+            restClient.post()
+                    .uri(RESEND_API_URL)
+                    .header("Authorization", "Bearer " + resendApiKey)
+                    .header("Content-Type", "application/json")
+                    .body(requestBody)
+                    .retrieve()
+                    .toBodilessEntity();
+
+            log.info("Email verification message sent successfully to: {}", email);
+            return CompletableFuture.completedFuture(null);
+        } catch (RestClientResponseException e) {
+            log.error("Resend API failed for {} with status {} and body: {}", email, e.getStatusCode(),
+                    e.getResponseBodyAsString());
+            return CompletableFuture.failedFuture(e);
+        } catch (Exception e) {
+            log.error("Failed to send email verification message to: {}", email, e);
+            return CompletableFuture.failedFuture(e);
+        }
+    }
+
+    private String buildEmailVerificationHTML(String verificationLink) {
+        String safeLink = escapeHtml(verificationLink);
+        return """
+                <!DOCTYPE html>
+                <html lang="en">
+                <head>
+                  <meta charset="UTF-8">
+                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                  <title>Verify your email - SummarySphere</title>
+                </head>
+                <body style="margin:0;background:#0f172a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#e2e8f0">
+                  <div style="max-width:600px;margin:0 auto;padding:36px 20px">
+                    <div style="background:#1e293b;border:1px solid #334155;border-radius:18px;overflow:hidden">
+                      <div style="padding:30px;background:linear-gradient(135deg,#2563eb,#4f46e5);text-align:center">
+                        <h1 style="margin:0;color:#fff;font-size:28px">SummarySphere</h1>
+                      </div>
+                      <div style="padding:36px">
+                        <h2 style="margin:0 0 14px;color:#fff;font-size:24px">Verify your email</h2>
+                        <p style="margin:0 0 24px;line-height:1.6;color:#cbd5e1">Confirm your email address to upload documents and use all SummarySphere features.</p>
+                        <a href="%s" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;font-weight:700;padding:13px 24px;border-radius:9px">Verify email</a>
+                        <p style="margin:26px 0 8px;color:#94a3b8;font-size:13px">Or copy this link into your browser:</p>
+                        <p style="margin:0;padding:12px;background:#0f172a;border-radius:8px;word-break:break-all;color:#93c5fd;font-size:12px">%s</p>
+                        <p style="margin:22px 0 0;color:#fbbf24;font-size:13px">This link expires in 1 hour and can only be used once.</p>
+                      </div>
+                    </div>
+                  </div>
+                </body>
+                </html>
+                """.formatted(safeLink, safeLink);
+    }
+
     private String buildResetPasswordEmailHTML(String resetLink) {
         String safeLink = escapeHtml(resetLink);
 

@@ -11,6 +11,9 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -42,12 +45,13 @@ public class AuthService {
                 .email(request.email())
                 .password(passwordEncoder.encode(request.password())) // always hash the password!
                 .role(Role.USER)
+                .emailVerified(false)
                 .build();
 
         userRepository.save(user);
 
         String token = jwtService.generateToken(user);
-        return new AuthSchema.AuthResponse(token, user.getEmail(), user.getFullName(), user.getRole().name());
+        return toAuthResponse(token, user);
     }
 
     public AuthSchema.AuthResponse login(AuthSchema.LoginRequest request) {
@@ -66,7 +70,47 @@ public class AuthService {
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
         String token = jwtService.generateToken(user);
-        return new AuthSchema.AuthResponse(token, user.getEmail(), user.getFullName(), user.getRole().name());
+        return toAuthResponse(token, user);
+    }
+
+    public void requestEmailVerification(User user, String ip) {
+        if (user.isEmailVerified()) {
+            throw new IllegalStateException("Email is already verified");
+        }
+        if (rateLimitService != null) {
+            rateLimitService.checkEmailVerification(user.getEmail(), ip);
+        }
+
+        String verificationToken = UUID.randomUUID().toString();
+
+        user.setEmailVerificationTokenHash(sha256(verificationToken));
+        user.setEmailVerificationTokenExpiry(LocalDateTime.now().plusHours(1));
+        userRepository.save(user);
+
+        emailService.sendEmailVerificationEmail(user.getEmail(), verificationToken);
+    }
+
+    @Transactional
+    public void confirmEmailVerification(String rawToken) {
+        if (rawToken == null || rawToken.isBlank()) {
+            throw new IllegalArgumentException("Verification token is required");
+        }
+
+        User user = userRepository.findByEmailVerificationTokenHash(sha256(rawToken))
+                .orElseThrow(() -> new IllegalArgumentException("Invalid verification link"));
+
+        LocalDateTime expiry = user.getEmailVerificationTokenExpiry();
+        if (expiry == null || expiry.isBefore(LocalDateTime.now())) {
+            user.setEmailVerificationTokenHash(null);
+            user.setEmailVerificationTokenExpiry(null);
+            userRepository.save(user);
+            throw new IllegalArgumentException("Verification link has expired");
+        }
+
+        user.setEmailVerified(true);
+        user.setEmailVerificationTokenHash(null);
+        user.setEmailVerificationTokenExpiry(null);
+        userRepository.save(user);
     }
 
 
@@ -111,6 +155,25 @@ public class AuthService {
         user.setResetToken(null);
         user.setResetTokenExpiry(null);
         userRepository.save(user);
+    }
+
+    private AuthSchema.AuthResponse toAuthResponse(String token, User user) {
+        return new AuthSchema.AuthResponse(
+                token,
+                user.getEmail(),
+                user.getFullName(),
+                user.getRole().name(),
+                user.isEmailVerified());
+    }
+
+    private String sha256(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is not available", e);
+        }
     }
 
 }

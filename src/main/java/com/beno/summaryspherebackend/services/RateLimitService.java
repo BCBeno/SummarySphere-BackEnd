@@ -29,6 +29,13 @@ public class RateLimitService {
         check("forgot:ip:" + normalize(ip), 10, Duration.ofHours(1), "Too many password reset requests from this IP. Try again later.");
     }
 
+    public void checkEmailVerification(String email, String ip) {
+        check("verify-email:email:" + normalize(email), 3, Duration.ofHours(1),
+                "Too many verification emails requested. Try again later.");
+        check("verify-email:ip:" + normalize(ip), 10, Duration.ofHours(1),
+                "Too many verification emails requested from this IP. Try again later.");
+    }
+
     public void checkSummarization(String userId) {
         check("summarize:user:" + normalize(userId) + ":" + LocalDate.now(), 10, Duration.ofDays(1),
                 "Daily summarization limit reached. Try again tomorrow.");

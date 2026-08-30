@@ -14,6 +14,9 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -65,6 +68,7 @@ class AuthServiceTest {
         assertEquals(email, response.email());
         assertEquals("Test User", response.fullName());
         assertEquals("USER", response.role());
+        assertFalse(response.emailVerified());
     }
 
     @Test
@@ -100,6 +104,56 @@ class AuthServiceTest {
         assertEquals(email, response.email());
         assertEquals("Test User", response.fullName());
         assertEquals("USER", response.role());
+        assertFalse(response.emailVerified());
+    }
+
+    @Test
+    void requestEmailVerification_storesOnlySha256HashAndEmailsRawToken() throws Exception {
+        User user = User.builder()
+                .email("test@test.com")
+                .password("pw")
+                .fullName("Test")
+                .role(Role.USER)
+                .emailVerified(false)
+                .build();
+
+        authService.requestEmailVerification(user, "127.0.0.1");
+
+        ArgumentCaptor<String> rawTokenCaptor = ArgumentCaptor.forClass(String.class);
+        verify(emailService).sendEmailVerificationEmail(eq(user.getEmail()), rawTokenCaptor.capture());
+        String rawToken = rawTokenCaptor.getValue();
+        String expectedHash = HexFormat.of().formatHex(
+                MessageDigest.getInstance("SHA-256").digest(rawToken.getBytes(StandardCharsets.UTF_8)));
+
+        assertNotEquals(rawToken, user.getEmailVerificationTokenHash());
+        assertEquals(64, user.getEmailVerificationTokenHash().length());
+        assertEquals(expectedHash, user.getEmailVerificationTokenHash());
+        assertTrue(user.getEmailVerificationTokenExpiry().isAfter(LocalDateTime.now()));
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void confirmEmailVerification_marksEmailVerifiedAndConsumesToken() throws Exception {
+        String rawToken = "raw-secret-token";
+        String tokenHash = HexFormat.of().formatHex(
+                MessageDigest.getInstance("SHA-256").digest(rawToken.getBytes(StandardCharsets.UTF_8)));
+        User user = User.builder()
+                .email("test@test.com")
+                .password("pw")
+                .fullName("Test")
+                .role(Role.USER)
+                .emailVerified(false)
+                .emailVerificationTokenHash(tokenHash)
+                .emailVerificationTokenExpiry(LocalDateTime.now().plusMinutes(10))
+                .build();
+        when(userRepository.findByEmailVerificationTokenHash(tokenHash)).thenReturn(Optional.of(user));
+
+        authService.confirmEmailVerification(rawToken);
+
+        assertTrue(user.isEmailVerified());
+        assertNull(user.getEmailVerificationTokenHash());
+        assertNull(user.getEmailVerificationTokenExpiry());
+        verify(userRepository).save(user);
     }
 
     @Test

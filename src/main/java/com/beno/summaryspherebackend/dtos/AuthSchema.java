@@ -17,7 +17,17 @@ public class AuthSchema {
             String token,
             String email,
             String fullName,
-            String role
+            String role,
+            boolean emailVerified
+    ) {}
+
+    public record EmailVerificationRequest(
+            String token
+    ) {}
+
+    public record EmailVerificationResponse(
+            String message,
+            boolean emailVerified
     ) {}
 
 

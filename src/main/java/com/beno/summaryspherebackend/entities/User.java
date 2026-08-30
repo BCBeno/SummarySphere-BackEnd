@@ -39,6 +39,16 @@ public class User implements UserDetails {
     @Column(name = "reset_token_expiry")
     private LocalDateTime resetTokenExpiry;
 
+    @Builder.Default
+    @Column(name = "email_verified", nullable = false, columnDefinition = "boolean default false")
+    private boolean emailVerified = false;
+
+    @Column(name = "email_verification_token_hash", unique = true, length = 64)
+    private String emailVerificationTokenHash;
+
+    @Column(name = "email_verification_token_expiry")
+    private LocalDateTime emailVerificationTokenExpiry;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Role role;
