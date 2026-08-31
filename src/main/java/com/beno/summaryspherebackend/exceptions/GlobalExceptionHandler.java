@@ -8,13 +8,17 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @RestControllerAdvice
-public class  GlobalExceptionHandler {
+public class GlobalExceptionHandler {
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Map<String, Object>> handleAccessDenied(AccessDeniedException ex) {
@@ -33,17 +37,23 @@ public class  GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleAny(Exception ex) {
-        HttpStatus status;
         if (ex instanceof IllegalArgumentException) {
-            status = HttpStatus.BAD_REQUEST;
-        } else if (ex instanceof IllegalStateException) {
-            status = HttpStatus.CONFLICT;
-        } else if (ex instanceof EntityNotFoundException) {
-            status = HttpStatus.NOT_FOUND;
-        } else {
-            status = HttpStatus.INTERNAL_SERVER_ERROR;
+            return buildResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
         }
-        return buildResponse(status, ex.getMessage());
+        if (ex instanceof IllegalStateException) {
+            return buildResponse(HttpStatus.CONFLICT, ex.getMessage());
+        }
+        if (ex instanceof EntityNotFoundException) {
+            return buildResponse(HttpStatus.NOT_FOUND, ex.getMessage());
+        }
+
+        String errorId = UUID.randomUUID().toString();
+        log.error("Unexpected error. errorId={}", errorId, ex);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("message", "An unexpected error occurred");
+        body.put("errorId", errorId);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
     }
 
     private ResponseEntity<Map<String, Object>> buildResponse(HttpStatus status, String message) {
