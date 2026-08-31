@@ -2,6 +2,7 @@ package com.beno.summaryspherebackend.services.impl;
 
 import com.beno.summaryspherebackend.entities.User;
 import com.beno.summaryspherebackend.enums.Role;
+import com.beno.summaryspherebackend.repositories.AgentConversationRepository;
 import com.beno.summaryspherebackend.repositories.UserRepository;
 import com.beno.summaryspherebackend.services.DocumentService;
 import org.junit.jupiter.api.Test;
@@ -10,6 +11,8 @@ import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
@@ -23,11 +26,14 @@ class UserServiceImplTest {
     @Mock
     DocumentService documentService;
 
+    @Mock
+    AgentConversationRepository agentConversationRepository;
+
     @InjectMocks
     UserServiceImpl userService;
 
     @Test
-    void deleteUserWithFiles_deletesFilesThenUser_inOrder() {
+    void deleteUserWithFiles_deletesAgentConversationsFilesThenUser_inOrder() {
         User user = User.builder()
                 .email("test@test.com")
                 .password("pw")
@@ -37,7 +43,10 @@ class UserServiceImplTest {
 
         userService.deleteUserWithFiles(user);
 
-        InOrder inOrder = inOrder(documentService, userRepository);
+        InOrder inOrder = inOrder(agentConversationRepository, documentService, userRepository);
+        inOrder.verify(agentConversationRepository).findAllByUser(user);
+        inOrder.verify(agentConversationRepository).deleteAll(List.of());
+        inOrder.verify(agentConversationRepository).flush();
         inOrder.verify(documentService).deleteFilesByUser(user);
         inOrder.verify(userRepository).delete(user);
     }
