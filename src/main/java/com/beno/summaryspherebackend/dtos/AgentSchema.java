@@ -1,5 +1,8 @@
 package com.beno.summaryspherebackend.dtos;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -8,7 +11,11 @@ public class AgentSchema {
     private AgentSchema() {}
 
 
-    public record ChatRequest(String message) {}
+    public record ChatRequest(
+            @NotBlank(message = "Message is required")
+            @Size(max = 4000, message = "Message must not exceed 4000 characters")
+            String message
+    ) {}
 
 
     public record MessageDTO(

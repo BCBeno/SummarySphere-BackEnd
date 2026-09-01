@@ -5,6 +5,7 @@ import com.beno.summaryspherebackend.exceptions.RateLimitExceededException;
 import com.beno.summaryspherebackend.services.AuthService;
 import lombok.RequiredArgsConstructor;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -19,21 +20,21 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/register")
-    public ResponseEntity<AuthSchema.AuthResponse> register(@RequestBody AuthSchema.RegisterRequest request,
+    public ResponseEntity<AuthSchema.AuthResponse> register(@Valid @RequestBody AuthSchema.RegisterRequest request,
             HttpServletRequest httpRequest) {
         AuthSchema.AuthResponse response = authService.register(request, httpRequest.getRemoteAddr());
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthSchema.AuthResponse> login(@RequestBody AuthSchema.LoginRequest request,
+    public ResponseEntity<AuthSchema.AuthResponse> login(@Valid @RequestBody AuthSchema.LoginRequest request,
             HttpServletRequest httpRequest) {
         AuthSchema.AuthResponse response = authService.login(request, httpRequest.getRemoteAddr());
         return ResponseEntity.ok(response);
     }
 
     @PostMapping("/forgot-password")
-        public ResponseEntity<?> forgotPassword(@RequestBody AuthSchema.ForgotPasswordRequest request,
+        public ResponseEntity<?> forgotPassword(@Valid @RequestBody AuthSchema.ForgotPasswordRequest request,
             HttpServletRequest httpRequest) {
         // Email is sent asynchronously to avoid timeouts and return immediately
         try {
@@ -49,7 +50,7 @@ public class AuthController {
     }
 
     @PostMapping("/reset-password")
-    public ResponseEntity<?> resetPassword(@RequestBody AuthSchema.ResetPasswordRequest request) {
+    public ResponseEntity<?> resetPassword(@Valid @RequestBody AuthSchema.ResetPasswordRequest request) {
         try {
             authService.resetPassword(request.token(), request.newPassword());
             return ResponseEntity.ok("Password reset successfully");
@@ -73,7 +74,7 @@ public class AuthController {
 
     @PostMapping("/email-verification/confirm")
     public ResponseEntity<AuthSchema.EmailVerificationResponse> confirmEmailVerification(
-            @RequestBody AuthSchema.EmailVerificationRequest request) {
+            @Valid @RequestBody AuthSchema.EmailVerificationRequest request) {
         authService.confirmEmailVerification(request.token());
         return ResponseEntity.ok(new AuthSchema.EmailVerificationResponse(
                 "Email verified successfully", true));

@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.slf4j.Logger;
@@ -33,6 +34,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(RateLimitExceededException.class)
     public ResponseEntity<Map<String, Object>> handleRateLimit(RateLimitExceededException ex) {
         return buildResponse(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage());
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<Map<String, String>> handleValidation(MethodArgumentNotValidException ex) {
+        var error = ex.getBindingResult().getFieldError();
+        String message = error != null ? error.getDefaultMessage() : "Invalid request";
+        return ResponseEntity.badRequest().body(Map.of("message", message));
     }
 
     @ExceptionHandler(Exception.class)

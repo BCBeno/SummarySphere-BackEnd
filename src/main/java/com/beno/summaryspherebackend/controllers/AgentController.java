@@ -3,6 +3,7 @@ package com.beno.summaryspherebackend.controllers;
 import com.beno.summaryspherebackend.dtos.AgentSchema;
 import com.beno.summaryspherebackend.entities.User;
 import com.beno.summaryspherebackend.services.agent.AgentService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -29,13 +30,9 @@ public class AgentController {
     @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     @PostMapping("/chat")
     public ResponseEntity<?> chat(
-            @RequestBody AgentSchema.ChatRequest request,
+            @Valid @RequestBody AgentSchema.ChatRequest request,
             @AuthenticationPrincipal User currentUser
     ) {
-        if (request.message() == null || request.message().isBlank()) {
-            return ResponseEntity.badRequest().body("Message cannot be empty.");
-        }
-
         try {
             AgentSchema.ChatResponseDTO response = agentService.chat(request.message(), currentUser);
             return ResponseEntity.ok(response);

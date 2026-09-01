@@ -5,6 +5,7 @@ import com.beno.summaryspherebackend.entities.Document;
 import com.beno.summaryspherebackend.entities.User;
 import com.beno.summaryspherebackend.services.ChatService;
 import com.beno.summaryspherebackend.services.DocumentService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -29,7 +30,7 @@ public class ChatController {
     @PostMapping("/{id}/chat")
     public ResponseEntity<?> chat(
             @PathVariable String id,
-            @RequestBody ChatSchema.ChatRequest request,
+            @Valid @RequestBody ChatSchema.ChatRequest request,
             @AuthenticationPrincipal User currentUser
     ) {
         Optional<Document> docOpt = documentService.getDocumentById(id);

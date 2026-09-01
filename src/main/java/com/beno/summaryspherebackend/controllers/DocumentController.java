@@ -8,6 +8,7 @@ import com.beno.summaryspherebackend.entities.User;
 import com.beno.summaryspherebackend.services.DocumentService;
 import com.beno.summaryspherebackend.services.DocumentSummaryService;
 import com.beno.summaryspherebackend.services.AIService;
+import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -120,7 +121,7 @@ public class DocumentController {
     @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     @PostMapping("/{id}/summarize")
     public ResponseEntity<?> summarizeDocument(@PathVariable String id,
-            @RequestBody SummarizationSchema.SummarizeRequest summarizeRequest,
+            @Valid @RequestBody SummarizationSchema.SummarizeRequest summarizeRequest,
             @AuthenticationPrincipal User currentUser) {
         Optional<Document> docOpt = documentService.getDocumentById(id);
         if (docOpt.isEmpty()) {
