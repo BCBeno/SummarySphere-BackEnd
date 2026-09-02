@@ -38,4 +38,9 @@ public class DocumentSummary {
     private SummaryStatus status = SummaryStatus.PENDING;
 
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    @Column(nullable = false)
+    private int attemptCount = 0;
+
+    private LocalDateTime lastAttemptAt;
 }

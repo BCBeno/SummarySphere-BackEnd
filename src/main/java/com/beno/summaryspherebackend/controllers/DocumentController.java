@@ -7,7 +7,6 @@ import com.beno.summaryspherebackend.entities.DocumentSummary;
 import com.beno.summaryspherebackend.entities.User;
 import com.beno.summaryspherebackend.services.DocumentService;
 import com.beno.summaryspherebackend.services.DocumentSummaryService;
-import com.beno.summaryspherebackend.services.AIService;
 import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -25,12 +24,10 @@ public class DocumentController {
 
     private final DocumentService documentService;
     private final ConvertToDto convertToDto;
-    private final AIService aiService;
     private final DocumentSummaryService documentSummaryService;
 
-    public DocumentController(DocumentService documentService, ConvertToDto convertToDto, AIService aiService,
+    public DocumentController(DocumentService documentService, ConvertToDto convertToDto,
             DocumentSummaryService documentSummaryService) {
-        this.aiService = aiService;
         this.documentService = documentService;
         this.convertToDto = convertToDto;
         this.documentSummaryService = documentSummaryService;
@@ -120,34 +117,13 @@ public class DocumentController {
 
     @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     @PostMapping("/{id}/summarize")
-    public ResponseEntity<?> summarizeDocument(@PathVariable String id,
+    public ResponseEntity<SummarizationSchema.SummarizeAcceptedResponse> summarizeDocument(@PathVariable String id,
             @Valid @RequestBody SummarizationSchema.SummarizeRequest summarizeRequest,
             @AuthenticationPrincipal User currentUser) {
-        Optional<Document> docOpt = documentService.getDocumentById(id);
-        if (docOpt.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-        if (!isOwner(docOpt.get(), currentUser)) {
-            return ResponseEntity.status(403).body("You are not authorized to summarize this document.");
-        }
-
-        try {
-            String summary = aiService.summarizeAsync(id, summarizeRequest.summaryType(), currentUser).join();
-            SummarizationSchema.SummarizeResponse response = new SummarizationSchema.SummarizeResponse(summary, id);
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException ex) {
-            return ResponseEntity.badRequest().body("There was an error summarizing the document: " + ex.getMessage());
-        } catch (java.util.concurrent.CompletionException ex) {
-            Throwable cause = ex.getCause();
-            if (cause instanceof IllegalStateException) {
-                return ResponseEntity.status(503)
-                        .body("There was an error summarizing the document: " + cause.getMessage());
-            }
-            return ResponseEntity.status(500)
-                    .body("There was an unexpected error summarizing the document: " + cause.getMessage());
-        } catch (IllegalStateException ex) {
-            return ResponseEntity.status(503).body("There was an error summarizing the document: " + ex.getMessage());
-        }
+        DocumentSummary summary = documentSummaryService.requestSummary(
+                id, summarizeRequest.summaryType(), currentUser);
+        return ResponseEntity.accepted().body(
+                new SummarizationSchema.SummarizeAcceptedResponse(summary.getId(), summary.getStatus()));
     }
 
     @PreAuthorize("hasAnyRole('USER', 'ADMIN')")

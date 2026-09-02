@@ -6,7 +6,6 @@ import com.beno.summaryspherebackend.entities.User;
 import com.beno.summaryspherebackend.repositories.DocumentRepository;
 import com.beno.summaryspherebackend.services.DocumentService;
 import com.beno.summaryspherebackend.services.DocumentSummaryService;
-import com.beno.summaryspherebackend.services.AIService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
@@ -25,16 +24,13 @@ public class AgentTools {
 
     private final DocumentService documentService;
     private final DocumentSummaryService documentSummaryService;
-    private final AIService aiService;
     private final DocumentRepository documentRepository;
 
     public AgentTools(DocumentService documentService,
             DocumentSummaryService documentSummaryService,
-            AIService aiService,
             DocumentRepository documentRepository) {
         this.documentService = documentService;
         this.documentSummaryService = documentSummaryService;
-        this.aiService = aiService;
         this.documentRepository = documentRepository;
     }
 
@@ -218,9 +214,9 @@ public class AgentTools {
         }
 
         try {
-            String summary = aiService.summarizeAsync(documentId, summaryType, user).join();
-            return "Successfully generated '" + summaryType + "' summary for '" + docOpt.get().getTitle() + "':\n\n"
-                    + summary;
+            DocumentSummary summary = documentSummaryService.requestSummary(documentId, summaryType, user);
+            return "Summary generation accepted for '" + docOpt.get().getTitle()
+                    + "' (summary ID: " + summary.getId() + ", status: " + summary.getStatus() + ").";
         } catch (Exception ex) {
             Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
             log.error("Agent tool [triggerSummarization] failed: docId={}, type={}", documentId, summaryType, ex);

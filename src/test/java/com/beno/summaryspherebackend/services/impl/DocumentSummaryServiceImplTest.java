@@ -1,9 +1,15 @@
 package com.beno.summaryspherebackend.services.impl;
 
+import com.azure.storage.blob.BlobContainerClient;
 import com.beno.summaryspherebackend.entities.Document;
 import com.beno.summaryspherebackend.entities.DocumentSummary;
+import com.beno.summaryspherebackend.entities.User;
+import com.beno.summaryspherebackend.enums.SummaryStatus;
+import com.beno.summaryspherebackend.events.SummaryRequestedEvent;
 import com.beno.summaryspherebackend.repositories.DocumentRepository;
 import com.beno.summaryspherebackend.repositories.DocumentSummaryRepository;
+import com.beno.summaryspherebackend.services.RateLimitService;
+import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -17,6 +23,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -25,9 +32,40 @@ class DocumentSummaryServiceImplTest {
     DocumentSummaryRepository documentSummaryRepository;
     @Mock
     DocumentRepository documentRepository;
+    @Mock
+    BlobContainerClient blobContainerClient;
+    @Mock
+    RateLimitService rateLimitService;
+    @Mock
+    ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     DocumentSummaryServiceImpl documentSummaryService;
+
+    @Test
+    void requestSummary_savesPendingBeforePublishingEvent() {
+        User user = new User();
+        user.setId("user-1");
+        Document document = new Document("doc-1", "title", "file.pdf", 1L, ".pdf", null, user);
+        when(documentRepository.findByIdForUpdate("doc-1")).thenReturn(Optional.of(document));
+        when(documentSummaryRepository.existsByDocumentAndSummaryTypeIgnoreCaseAndStatusIn(
+                eq(document), eq("concise"), anyList())).thenReturn(false);
+        when(documentSummaryRepository.save(any(DocumentSummary.class))).thenAnswer(invocation -> {
+            DocumentSummary summary = invocation.getArgument(0);
+            summary.setId(42L);
+            return summary;
+        });
+
+        DocumentSummary result = documentSummaryService.requestSummary("doc-1", " concise ", user);
+
+        assertEquals(42L, result.getId());
+        assertEquals("concise", result.getSummaryType());
+        assertEquals(SummaryStatus.PENDING, result.getStatus());
+        assertEquals(0, result.getAttemptCount());
+        assertEquals(SummaryStatus.PENDING.name(), document.getStatus());
+        verify(rateLimitService).checkSummarization("user-1");
+        verify(eventPublisher).publishEvent(new SummaryRequestedEvent(42L));
+    }
 
     @Test
     void getLatestSummaryForDocument_returnsEmpty_whenDocumentMissing() {
