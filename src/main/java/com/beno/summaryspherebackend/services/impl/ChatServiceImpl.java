@@ -17,15 +17,15 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import com.beno.summaryspherebackend.services.impl.ChatPersistenceService.ChatContext;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 @Service
 public class ChatServiceImpl implements ChatService {
 
     private final ChatClient chatClient;
+    private final ChatPersistenceService chatPersistenceService;
     private final ChatMessageRepository chatMessageRepository;
     private final DocumentRepository documentRepository;
     private final DocumentVectorService documentVectorService;
@@ -33,7 +33,9 @@ public class ChatServiceImpl implements ChatService {
     public ChatServiceImpl(ChatClient.Builder builder,
                            ChatMessageRepository chatMessageRepository,
                            DocumentRepository documentRepository,
-                           DocumentVectorService documentVectorService) {
+                           DocumentVectorService documentVectorService,
+                           ChatPersistenceService chatPersistenceService) {
+        this.chatPersistenceService = chatPersistenceService;
         this.chatClient = builder.build();
         this.chatMessageRepository = chatMessageRepository;
         this.documentRepository = documentRepository;
@@ -41,11 +43,15 @@ public class ChatServiceImpl implements ChatService {
     }
 
     @Override
-    @Transactional
     public ChatSchema.ChatMessageDTO sendMessage(String documentId, String message, User user) {
-        Document document = documentRepository.findById(documentId)
-                .orElseThrow(() -> new IllegalArgumentException("Document not found: " + documentId));
+        ChatContext context = chatPersistenceService.prepareChat(documentId, message, user);
+        String aiResponse = callAi(context);
+        return chatPersistenceService.saveAssistantResponse(context, aiResponse);
+    }
 
+    private String callAi(ChatContext context) {
+        String documentId = context.document().getDocumentId();
+        String message = context.message();
         List<String> relevantChunks = documentVectorService.searchRelevantChunks(documentId, message, 5);
 
         if (relevantChunks.isEmpty()) {
@@ -53,10 +59,6 @@ public class ChatServiceImpl implements ChatService {
         }
 
         String contextContent = String.join("\n\n", relevantChunks);
-
-        List<ChatMessage> recentMessages = chatMessageRepository.findTop10ByDocumentAndUserOrderByCreatedAtDesc(document, user);
-        List<ChatMessage> history = new ArrayList<>(recentMessages);
-        Collections.reverse(history);
 
         String systemContent = """
                 You are a helpful assistant. The user wants to discuss the following document with you.
@@ -69,7 +71,7 @@ public class ChatServiceImpl implements ChatService {
         List<Message> messages = new ArrayList<>();
         messages.add(new SystemMessage(systemContent));
 
-        for (ChatMessage msg : history) {
+        for (ChatMessage msg : context.history()) {
             if (msg.getRole() == MessageRole.USER) {
                 messages.add(new UserMessage(msg.getContent()));
             } else {
@@ -88,12 +90,7 @@ public class ChatServiceImpl implements ChatService {
             aiResponse = aiResponse.replaceAll("\\*\\*", "");
         }
 
-        chatMessageRepository.save(new ChatMessage(null, document, user, MessageRole.USER, message, LocalDateTime.now()));
-        ChatMessage assistantMsg = chatMessageRepository.save(
-                new ChatMessage(null, document, user, MessageRole.ASSISTANT, aiResponse, LocalDateTime.now())
-        );
-
-        return new ChatSchema.ChatMessageDTO(MessageRole.ASSISTANT.name(), aiResponse, assistantMsg.getCreatedAt());
+        return aiResponse;
     }
 
     @Override
