@@ -1,5 +1,6 @@
 package com.beno.summaryspherebackend.config;
 
+import com.azure.core.http.jdk.httpclient.JdkHttpClientBuilder;
 import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.BlobServiceClientBuilder;
@@ -20,6 +21,7 @@ public class AzureBlobConfig {
     public BlobServiceClient blobServiceClient() {
         return new BlobServiceClientBuilder()
                 .connectionString(connectionString)
+                .httpClient(new JdkHttpClientBuilder().build())
                 .buildClient();
     }
 
