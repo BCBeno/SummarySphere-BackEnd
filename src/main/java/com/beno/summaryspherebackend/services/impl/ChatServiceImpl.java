@@ -95,8 +95,8 @@ public class ChatServiceImpl implements ChatService {
 
     @Override
     public List<ChatSchema.ChatMessageDTO> getChatHistory(String documentId, User user) {
-        Document document = documentRepository.findById(documentId)
-                .orElseThrow(() -> new IllegalArgumentException("Document not found: " + documentId));
+        Document document = documentRepository.findByDocumentIdAndUploadedById(documentId, user == null ? null : user.getId())
+                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("Document not found."));
 
         return chatMessageRepository.findAllByDocumentAndUserOrderByCreatedAtAsc(document, user)
                 .stream()
@@ -107,8 +107,8 @@ public class ChatServiceImpl implements ChatService {
     @Override
     @Transactional
     public void clearChatHistory(String documentId, User user) {
-        Document document = documentRepository.findById(documentId)
-                .orElseThrow(() -> new IllegalArgumentException("Document not found: " + documentId));
+        Document document = documentRepository.findByDocumentIdAndUploadedById(documentId, user == null ? null : user.getId())
+                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("Document not found."));
 
         chatMessageRepository.deleteAllByDocumentAndUser(document, user);
     }

@@ -117,9 +117,9 @@ public class AgentTools {
 
         Optional<Document> docOpt;
         try {
-            docOpt = documentService.getDocumentById(documentId);
-        } catch (Exception e) {
-            return "Error: Invalid document ID format. Please use searchDocuments to find the correct UUID.";
+            docOpt = Optional.of(documentService.getOwnedDocument(documentId, user.getId()));
+        } catch (jakarta.persistence.EntityNotFoundException e) {
+            return "Document not found with ID: " + documentId;
         }
 
         if (docOpt.isEmpty()) {
@@ -127,9 +127,6 @@ public class AgentTools {
         }
 
         Document doc = docOpt.get();
-        if (!isOwner(doc, user)) {
-            return "You don't have access to this document.";
-        }
 
         String content = doc.getContent();
         if (content == null || content.isBlank()) {
@@ -160,19 +157,16 @@ public class AgentTools {
 
         Optional<Document> docOpt;
         try {
-            docOpt = documentService.getDocumentById(documentId);
-        } catch (Exception e) {
-            return "Error: Invalid document ID format. Please use searchDocuments to find the correct UUID.";
+            docOpt = Optional.of(documentService.getOwnedDocument(documentId, user.getId()));
+        } catch (jakarta.persistence.EntityNotFoundException e) {
+            return "Document not found with ID: " + documentId;
         }
         if (docOpt.isEmpty()) {
             return "Document not found with ID: " + documentId;
         }
-        if (!isOwner(docOpt.get(), user)) {
-            return "You don't have access to this document.";
-        }
 
         Optional<DocumentSummary> summaryOpt = documentSummaryService.getLatestSummaryForDocumentByType(documentId,
-                summaryType);
+                summaryType, user.getId());
         if (summaryOpt.isEmpty()) {
             return "No '" + summaryType + "' summary exists for document '" + docOpt.get().getTitle()
                     + "'. You can create one using the triggerSummarization tool.";
@@ -202,15 +196,12 @@ public class AgentTools {
 
         Optional<Document> docOpt;
         try {
-            docOpt = documentService.getDocumentById(documentId);
-        } catch (Exception e) {
-            return "Error: Invalid document ID format. Please use searchDocuments to find the correct UUID.";
+            docOpt = Optional.of(documentService.getOwnedDocument(documentId, user.getId()));
+        } catch (jakarta.persistence.EntityNotFoundException e) {
+            return "Document not found with ID: " + documentId;
         }
         if (docOpt.isEmpty()) {
             return "Document not found with ID: " + documentId;
-        }
-        if (!isOwner(docOpt.get(), user)) {
-            return "You don't have access to this document.";
         }
 
         try {
@@ -237,15 +228,12 @@ public class AgentTools {
 
         Optional<Document> docOpt;
         try {
-            docOpt = documentService.getDocumentById(documentId);
-        } catch (Exception e) {
-            return "Error: Invalid document ID format. Please use searchDocuments to find the correct UUID.";
+            docOpt = Optional.of(documentService.getOwnedDocument(documentId, user.getId()));
+        } catch (jakarta.persistence.EntityNotFoundException e) {
+            return "Document not found with ID: " + documentId;
         }
         if (docOpt.isEmpty()) {
             return "Document not found with ID: " + documentId;
-        }
-        if (!isOwner(docOpt.get(), user)) {
-            return "You don't have access to this document.";
         }
 
         String content = docOpt.get().getContent();
@@ -264,12 +252,4 @@ public class AgentTools {
                 + "-question quiz based on this text:\n\n" + truncatedContent;
     }
 
-    private boolean isOwner(Document doc, User user) {
-        if (doc == null || user == null)
-            return false;
-        User owner = doc.getUploadedBy();
-        if (owner == null)
-            return false;
-        return owner.getId() != null && owner.getId().equals(user.getId());
-    }
 }

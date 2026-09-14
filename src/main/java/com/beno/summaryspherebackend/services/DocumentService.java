@@ -12,11 +12,11 @@ import java.util.Optional;
 
 public interface DocumentService {
     String storeFile(MultipartFile file, String title, User uploader) throws IOException;
-    Optional<Document> getDocumentById(String id);
+    Document getOwnedDocument(String id, String userId);
     List<DocumentListDTO> listFiles();
     List<DocumentListDTO> listFilesByUser(User user);
-    void deleteFile(String id) throws IOException;
-    String generateDownloadLink(String id);
+    void deleteOwnedDocument(String id, String userId);
+    String createOwnedDownloadUrl(String id, String userId);
     void deleteFilesByUser(User user);
 
 }

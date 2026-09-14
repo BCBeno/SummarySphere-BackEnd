@@ -60,9 +60,7 @@ public class AIServiceImpl implements AIService {
 
         SummaryProcessingStateService.SummaryWorkItem work = workItem.get();
         try {
-            Document document = documentService.getDocumentById(work.documentId())
-                    .orElseThrow(() -> new IllegalArgumentException(
-                            "Document with ID " + work.documentId() + " not found."));
+            Document document = documentService.getOwnedDocument(work.documentId(), work.userId());
             String rawText = document.getContent();
             if (rawText == null || rawText.isBlank()) {
                 throw new IllegalArgumentException("Text to summarize cannot be null or empty.");

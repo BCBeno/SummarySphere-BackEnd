@@ -27,8 +27,8 @@ public class ChatPersistenceService {
 
     @Transactional
     public ChatContext prepareChat(String documentId, String message, User user) {
-        Document document = documentRepository.findById(documentId)
-                .orElseThrow(() -> new IllegalArgumentException("Document not found: " + documentId));
+        Document document = documentRepository.findByDocumentIdAndUploadedById(documentId, user == null ? null : user.getId())
+                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("Document not found."));
 
         // Keep the previous messages separate; callAi adds the current message once.
         List<ChatMessage> history = new ArrayList<>(

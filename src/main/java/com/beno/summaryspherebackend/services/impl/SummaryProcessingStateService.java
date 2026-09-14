@@ -50,7 +50,7 @@ public class SummaryProcessingStateService {
         return Optional.of(new SummaryWorkItem(
                 summary.getId(),
                 summary.getDocument().getDocumentId(),
-                summary.getSummaryType()));
+                summary.getSummaryType(), summary.getDocument().getUploadedBy().getId()));
     }
 
     @Transactional
@@ -74,6 +74,6 @@ public class SummaryProcessingStateService {
         });
     }
 
-    public record SummaryWorkItem(Long summaryId, String documentId, String summaryType) {
+    public record SummaryWorkItem(Long summaryId, String documentId, String summaryType, String userId) {
     }
 }

@@ -43,6 +43,9 @@ class DocumentServiceImplTest {
     @Mock
     FileExtractionService fileExtractionService;
 
+    @Mock
+    com.beno.summaryspherebackend.services.DocumentVectorService documentVectorService;
+
     @InjectMocks
     DocumentServiceImpl documentService;
 
@@ -126,6 +129,7 @@ class DocumentServiceImplTest {
     void generateDownloadLink_whenBlobExists_returnsLink() {
         // Arrange
         String id = "file-id.pdf";
+        when(documentRepository.findByDocumentIdAndUploadedById(id, "user")).thenReturn(Optional.of(new Document()));
         BlobClient blobClient = mock(BlobClient.class);
         when(blobContainerClient.getBlobClient(id)).thenReturn(blobClient);
         when(blobClient.exists()).thenReturn(true);
@@ -133,7 +137,7 @@ class DocumentServiceImplTest {
         when(blobClient.generateSas(any())).thenReturn("sastoken123");
 
         // Act
-        String link = documentService.generateDownloadLink(id);
+        String link = documentService.createOwnedDownloadUrl(id, "user");
 
         // Assert
         assertEquals("http://storage.example.com/container/" + id + "?sastoken123", link);
@@ -145,11 +149,12 @@ class DocumentServiceImplTest {
     void generateDownloadLink_whenBlobMissing_throws() {
         // Arrange
         String id = "missing-file.pdf";
+        when(documentRepository.findByDocumentIdAndUploadedById(id, "user")).thenReturn(Optional.of(new Document()));
         BlobClient blobClient = mock(BlobClient.class);
         when(blobContainerClient.getBlobClient(id)).thenReturn(blobClient);
         when(blobClient.exists()).thenReturn(false);
 
-        assertThrows(IllegalArgumentException.class, () -> documentService.generateDownloadLink(id));
+        assertThrows(IllegalArgumentException.class, () -> documentService.createOwnedDownloadUrl(id, "user"));
         verify(blobClient, times(1)).exists();
         verify(blobClient, times(0)).generateSas(any());
     }
@@ -158,10 +163,10 @@ class DocumentServiceImplTest {
     void deleteFile_whenNotFound_throws() {
         // Arrange
         String id = "missing-id";
-        when(documentRepository.findById(id)).thenReturn(Optional.empty());
+        when(documentRepository.findByDocumentIdAndUploadedById(id, "user")).thenReturn(Optional.empty());
 
         // Act + Assert
-        assertThrows(IllegalArgumentException.class, () -> documentService.deleteFile(id));
+        assertThrows(jakarta.persistence.EntityNotFoundException.class, () -> documentService.deleteOwnedDocument(id, "user"));
     }
 
     @Test
@@ -169,17 +174,48 @@ class DocumentServiceImplTest {
         // Arrange
         String id = "present-id";
         Document doc = new Document(id, "title", "orig.pdf", 123L, ".pdf", "content", null);
-        when(documentRepository.findById(id)).thenReturn(Optional.of(doc));
+        when(documentRepository.findByDocumentIdAndUploadedById(id, "user")).thenReturn(Optional.of(doc));
         when(documentSummaryRepository.findAllByDocument(doc)).thenReturn(java.util.Collections.emptyList());
         BlobClient blobClient = mock(BlobClient.class);
         when(blobContainerClient.getBlobClient(id)).thenReturn(blobClient);
         when(blobClient.deleteIfExists()).thenReturn(true);
 
         // Act
-        documentService.deleteFile(id);
+        documentService.deleteOwnedDocument(id, "user");
 
         // Assert
         verify(blobClient, times(1)).deleteIfExists();
         verify(documentRepository, times(1)).delete(doc);
     }
-}
+    @Test
+    void inaccessibleDocumentNeverTouchesStorageOrVectors() {
+        assertThrows(jakarta.persistence.EntityNotFoundException.class,
+                () -> documentService.getOwnedDocument("other.pdf", "user"));
+        assertThrows(jakarta.persistence.EntityNotFoundException.class,
+                () -> documentService.createOwnedDownloadUrl("other.pdf", "user"));
+        assertThrows(jakarta.persistence.EntityNotFoundException.class,
+                () -> documentService.deleteOwnedDocument("other.pdf", "user"));
+        verifyNoInteractions(blobContainerClient, documentVectorService, documentSummaryRepository);
+        verify(documentRepository, never()).findById(anyString());
+        verify(documentRepository, never()).delete(any());
+    }
+
+    @Test
+    void ownedContentIsHydratedAfterOwnerQuery() {
+        Document doc = new Document();
+        doc.setContentBlobName("content.txt");
+        BlobClient blob = mock(BlobClient.class);
+        when(documentRepository.findByDocumentIdAndUploadedById("doc.pdf", "user")).thenReturn(Optional.of(doc));
+        when(blobContainerClient.getBlobClient("content.txt")).thenReturn(blob);
+        when(blob.exists()).thenReturn(true);
+        doAnswer(invocation -> {
+            ((java.io.OutputStream) invocation.getArgument(0)).write("content".getBytes());
+            return null;
+        }).when(blob).downloadStream(any(java.io.OutputStream.class));
+        assertEquals("content", documentService.getOwnedDocument("doc.pdf", "user").getContent());
+        var order = inOrder(documentRepository, blobContainerClient, blob);
+        order.verify(documentRepository).findByDocumentIdAndUploadedById("doc.pdf", "user");
+        order.verify(blobContainerClient).getBlobClient("content.txt");
+        order.verify(blob).exists();
+        order.verify(blob).downloadStream(any(java.io.OutputStream.class));
+    }}

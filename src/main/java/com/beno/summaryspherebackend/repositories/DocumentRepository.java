@@ -17,7 +17,10 @@ import java.util.Optional;
 public interface DocumentRepository extends JpaRepository<Document, String> {
     List<Document> findByUploadedBy(User user);
 
+    @Query("select d from Document d where d.documentId = :documentId and d.uploadedBy.id = :userId")
+    Optional<Document> findByDocumentIdAndUploadedById(@Param("documentId") String documentId, @Param("userId") String userId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select d from Document d where d.documentId = :id")
-    Optional<Document> findByIdForUpdate(@Param("id") String id);
+    @Query("select d from Document d where d.documentId = :id and d.uploadedBy.id = :userId")
+    Optional<Document> findOwnedByIdForUpdate(@Param("id") String id, @Param("userId") String userId);
 }

@@ -123,9 +123,8 @@ public class DocumentServiceImpl implements DocumentService {
     }
 
     @Override
-    public Optional<Document> getDocumentById(String id) {
-        return documentRepository.findById(id)
-                .map(this::hydrateDocumentContent);
+    public Document getOwnedDocument(String id, String userId) {
+        return hydrateDocumentContent(requireOwnedDocument(id, userId));
     }
 
     @Override
@@ -144,13 +143,8 @@ public class DocumentServiceImpl implements DocumentService {
 
     @Override
     @Transactional
-    public void deleteFile(String id) {
-        Optional<Document> documentOpt = documentRepository.findById(id);
-        if (documentOpt.isEmpty()) {
-            throw new IllegalArgumentException("File not found with id " + id);
-        }
-
-        Document document = documentOpt.get();
+    public void deleteOwnedDocument(String id, String userId) {
+        Document document = requireOwnedDocument(id, userId);
 
         // delete vector store chunks
         try {
@@ -186,7 +180,8 @@ public class DocumentServiceImpl implements DocumentService {
     }
 
     @Override
-    public String generateDownloadLink(String id) {
+    public String createOwnedDownloadUrl(String id, String userId) {
+        requireOwnedDocument(id, userId);
         BlobClient blobClient = blobContainerClient.getBlobClient(id);
 
         if (!blobClient.exists()) {
@@ -233,6 +228,14 @@ public class DocumentServiceImpl implements DocumentService {
             }
         }
         documentRepository.deleteAll(userFileList);
+    }
+
+    private Document requireOwnedDocument(String id, String userId) {
+        if (userId == null || id == null) {
+            throw new jakarta.persistence.EntityNotFoundException("Document not found.");
+        }
+        return documentRepository.findByDocumentIdAndUploadedById(id, userId)
+                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("Document not found."));
     }
 
     private String buildContentBlobName(String documentId) {

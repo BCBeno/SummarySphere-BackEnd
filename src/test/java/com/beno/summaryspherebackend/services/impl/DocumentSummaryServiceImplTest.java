@@ -47,7 +47,7 @@ class DocumentSummaryServiceImplTest {
         User user = new User();
         user.setId("user-1");
         Document document = new Document("doc-1", "title", "file.pdf", 1L, ".pdf", null, user);
-        when(documentRepository.findByIdForUpdate("doc-1")).thenReturn(Optional.of(document));
+        when(documentRepository.findOwnedByIdForUpdate("doc-1", "user-1")).thenReturn(Optional.of(document));
         when(documentSummaryRepository.existsByDocumentAndSummaryTypeIgnoreCaseAndStatusIn(
                 eq(document), eq("concise"), anyList())).thenReturn(false);
         when(documentSummaryRepository.save(any(DocumentSummary.class))).thenAnswer(invocation -> {
@@ -69,9 +69,9 @@ class DocumentSummaryServiceImplTest {
 
     @Test
     void getLatestSummaryForDocument_returnsEmpty_whenDocumentMissing() {
-        when(documentRepository.findById("missing")).thenReturn(Optional.empty());
+        when(documentRepository.findByDocumentIdAndUploadedById("missing", "user")).thenReturn(Optional.empty());
 
-        assertTrue(documentSummaryService.getLatestSummaryForDocument("missing").isEmpty());
+        org.junit.jupiter.api.Assertions.assertThrows(jakarta.persistence.EntityNotFoundException.class, () -> documentSummaryService.getLatestSummaryForDocument("missing", "user"));
         verify(documentSummaryRepository, never()).findFirstByDocumentOrderByCreatedAtDesc(any());
     }
 
@@ -80,24 +80,25 @@ class DocumentSummaryServiceImplTest {
         Document doc = new Document("id", "t", "o.pdf", 1L, ".pdf", "content", null);
         DocumentSummary summary = new DocumentSummary();
 
-        when(documentRepository.findById("id")).thenReturn(Optional.of(doc));
+        when(documentRepository.findByDocumentIdAndUploadedById("id", "user")).thenReturn(Optional.of(doc));
         when(documentSummaryRepository.findFirstByDocumentOrderByCreatedAtDesc(doc)).thenReturn(Optional.of(summary));
 
-        assertEquals(Optional.of(summary), documentSummaryService.getLatestSummaryForDocument("id"));
+        assertEquals(Optional.of(summary), documentSummaryService.getLatestSummaryForDocument("id", "user"));
     }
 
     @Test
     void getLatestSummaryForDocumentByType_returnsEmpty_whenTypeBlank() {
-        assertTrue(documentSummaryService.getLatestSummaryForDocumentByType("id", " ").isEmpty());
-        verifyNoInteractions(documentRepository);
+        when(documentRepository.findByDocumentIdAndUploadedById("id", "user")).thenReturn(Optional.of(new Document()));
+        assertTrue(documentSummaryService.getLatestSummaryForDocumentByType("id", " ", "user").isEmpty());
+        verify(documentRepository).findByDocumentIdAndUploadedById("id", "user");
         verifyNoInteractions(documentSummaryRepository);
     }
 
     @Test
     void getLatestSummaryForDocumentByType_returnsEmpty_whenDocumentMissing() {
-        when(documentRepository.findById("missing")).thenReturn(Optional.empty());
+        when(documentRepository.findByDocumentIdAndUploadedById("missing", "user")).thenReturn(Optional.empty());
 
-        assertTrue(documentSummaryService.getLatestSummaryForDocumentByType("missing", "short").isEmpty());
+        org.junit.jupiter.api.Assertions.assertThrows(jakarta.persistence.EntityNotFoundException.class, () -> documentSummaryService.getLatestSummaryForDocumentByType("missing", "short", "user"));
         verify(documentSummaryRepository, never()).findFirstByDocumentAndSummaryTypeIgnoreCaseOrderByCreatedAtDesc(any(), any());
     }
 
@@ -106,19 +107,30 @@ class DocumentSummaryServiceImplTest {
         Document doc = new Document("id", "t", "o.pdf", 1L, ".pdf", "content", null);
         DocumentSummary summary = new DocumentSummary();
 
-        when(documentRepository.findById("id")).thenReturn(Optional.of(doc));
+        when(documentRepository.findByDocumentIdAndUploadedById("id", "user")).thenReturn(Optional.of(doc));
         when(documentSummaryRepository.findFirstByDocumentAndSummaryTypeIgnoreCaseOrderByCreatedAtDesc(doc, "short"))
                 .thenReturn(Optional.of(summary));
 
-        assertEquals(Optional.of(summary), documentSummaryService.getLatestSummaryForDocumentByType("id", " short "));
+        assertEquals(Optional.of(summary), documentSummaryService.getLatestSummaryForDocumentByType("id", " short ", "user"));
     }
 
     @Test
     void getSummariesForDocument_returnsEmptyList_whenDocumentMissing() {
-        when(documentRepository.findById("missing")).thenReturn(Optional.empty());
+        when(documentRepository.findByDocumentIdAndUploadedById("missing", "user")).thenReturn(Optional.empty());
 
-        List<DocumentSummary> result = documentSummaryService.getSummariesForDocument("missing");
-        assertEquals(Collections.emptyList(), result);
+        org.junit.jupiter.api.Assertions.assertThrows(jakarta.persistence.EntityNotFoundException.class, () -> documentSummaryService.getSummariesForDocument("missing", "user"));
         verify(documentSummaryRepository, never()).findAllByDocumentOrderByCreatedAtDesc(any());
     }
-}
+    @Test
+    void inaccessibleSummaryOperationsHaveNoSideEffects() {
+        User user = User.builder().id("user").build();
+        org.junit.jupiter.api.Assertions.assertThrows(jakarta.persistence.EntityNotFoundException.class,
+                () -> documentSummaryService.requestSummary("other", "concise", user));
+        org.junit.jupiter.api.Assertions.assertThrows(jakarta.persistence.EntityNotFoundException.class,
+                () -> documentSummaryService.getLatestSummaryForDocument("other", "user"));
+        org.junit.jupiter.api.Assertions.assertThrows(jakarta.persistence.EntityNotFoundException.class,
+                () -> documentSummaryService.getLatestSummaryForDocumentByType("other", "concise", "user"));
+        org.junit.jupiter.api.Assertions.assertThrows(jakarta.persistence.EntityNotFoundException.class,
+                () -> documentSummaryService.getSummariesForDocument("other", "user"));
+        verifyNoInteractions(blobContainerClient, documentSummaryRepository, rateLimitService, eventPublisher);
+    }}

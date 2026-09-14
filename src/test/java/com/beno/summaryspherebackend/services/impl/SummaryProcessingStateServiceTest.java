@@ -31,6 +31,7 @@ class SummaryProcessingStateServiceTest {
 
         assertTrue(work.isPresent());
         assertEquals("doc-1", work.get().documentId());
+        assertEquals("user", work.get().userId());
         assertEquals(SummaryStatus.PROCESSING, summary.getStatus());
         assertEquals(1, summary.getAttemptCount());
         assertEquals(SummaryStatus.PROCESSING.name(), summary.getDocument().getStatus());
@@ -76,6 +77,7 @@ class SummaryProcessingStateServiceTest {
     private DocumentSummary pendingSummary(Long id, int attempts) {
         Document document = new Document();
         document.setDocumentId("doc-1");
+        document.setUploadedBy(com.beno.summaryspherebackend.entities.User.builder().id("user").build());
         DocumentSummary summary = new DocumentSummary();
         summary.setId(id);
         summary.setDocument(document);
