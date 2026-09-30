@@ -53,9 +53,11 @@ class DocumentServiceImplTest {
     void storeFileInObjectStorage_success() throws Exception {
         // Arrange
         MultipartFile file = mock(MultipartFile.class);
-        byte[] contentBytes = "hello world".getBytes();
+        // The filename and content should agree with the server-side MIME validation.
+        byte[] contentBytes = "%PDF-1.4\n".getBytes();
         when(file.getInputStream())
-            .thenReturn(new ByteArrayInputStream(contentBytes), new ByteArrayInputStream(contentBytes));
+            .thenReturn(new ByteArrayInputStream(contentBytes), new ByteArrayInputStream(contentBytes),
+                    new ByteArrayInputStream(contentBytes));
         when(file.getOriginalFilename()).thenReturn("test.pdf");
         when(file.getSize()).thenReturn((long) contentBytes.length);
 
@@ -81,8 +83,10 @@ class DocumentServiceImplTest {
         assertEquals("test.pdf", saved.getOriginalFilename());
         assertEquals((long) contentBytes.length, saved.getSize());
         assertEquals(uploader, saved.getUploadedBy());
-        verify(objectStorageService, times(2)).upload(anyString(), any(InputStream.class), anyLong(),
-                org.mockito.ArgumentMatchers.nullable(String.class));
+        verify(objectStorageService).upload(eq(returnedId), any(InputStream.class), eq((long) contentBytes.length),
+                eq("application/pdf"));
+        verify(objectStorageService).upload(eq("documents/" + returnedId + "/content.txt"),
+                any(InputStream.class), anyLong(), eq("text/plain; charset=utf-8"));
     }
 
     @Test
