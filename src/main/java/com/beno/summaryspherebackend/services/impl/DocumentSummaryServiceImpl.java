@@ -1,7 +1,5 @@
 package com.beno.summaryspherebackend.services.impl;
 
-import com.azure.storage.blob.BlobClient;
-import com.azure.storage.blob.BlobContainerClient;
 import com.beno.summaryspherebackend.entities.Document;
 import com.beno.summaryspherebackend.entities.DocumentSummary;
 import com.beno.summaryspherebackend.entities.User;
@@ -10,6 +8,7 @@ import com.beno.summaryspherebackend.events.SummaryRequestedEvent;
 import com.beno.summaryspherebackend.repositories.DocumentRepository;
 import com.beno.summaryspherebackend.repositories.DocumentSummaryRepository;
 import com.beno.summaryspherebackend.services.DocumentSummaryService;
+import com.beno.summaryspherebackend.services.ObjectStorageService;
 import com.beno.summaryspherebackend.services.RateLimitService;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.context.ApplicationEventPublisher;
@@ -17,8 +16,6 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
@@ -28,18 +25,18 @@ public class DocumentSummaryServiceImpl implements DocumentSummaryService {
 
     private final DocumentSummaryRepository documentSummaryRepository;
     private final DocumentRepository documentRepository;
-    private final BlobContainerClient blobContainerClient;
+    private final ObjectStorageService objectStorageService;
     private final RateLimitService rateLimitService;
     private final ApplicationEventPublisher eventPublisher;
 
     public DocumentSummaryServiceImpl(DocumentSummaryRepository documentSummaryRepository,
                                       DocumentRepository documentRepository,
-                                      BlobContainerClient blobContainerClient,
+                                      ObjectStorageService objectStorageService,
                                       RateLimitService rateLimitService,
                                       ApplicationEventPublisher eventPublisher) {
         this.documentSummaryRepository = documentSummaryRepository;
         this.documentRepository = documentRepository;
-        this.blobContainerClient = blobContainerClient;
+        this.objectStorageService = objectStorageService;
         this.rateLimitService = rateLimitService;
         this.eventPublisher = eventPublisher;
     }
@@ -123,9 +120,9 @@ public class DocumentSummaryServiceImpl implements DocumentSummaryService {
         }
 
         if (summary.getSummaryBlobName() != null && !summary.getSummaryBlobName().isBlank()) {
-            BlobClient blobClient = blobContainerClient.getBlobClient(summary.getSummaryBlobName());
-            if (blobClient.exists()) {
-                summary.setSummaryText(readBlobAsText(blobClient));
+            if (objectStorageService.exists(summary.getSummaryBlobName())) {
+                summary.setSummaryText(new String(objectStorageService.download(summary.getSummaryBlobName()),
+                        StandardCharsets.UTF_8));
                 return summary;
             }
 
@@ -134,7 +131,7 @@ public class DocumentSummaryServiceImpl implements DocumentSummaryService {
                 return summary;
             }
 
-            throw new IllegalStateException("Summary blob not found: " + summary.getSummaryBlobName());
+            throw new IllegalStateException("Summary object not found: " + summary.getSummaryBlobName());
         }
 
         if (summary.getStatus() == SummaryStatus.FAILED) {
@@ -144,13 +141,4 @@ public class DocumentSummaryServiceImpl implements DocumentSummaryService {
         return summary;
     }
 
-    private String readBlobAsText(BlobClient blobClient) {
-        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
-            blobClient.downloadStream(outputStream);
-            return outputStream.toString(StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw new IllegalStateException("Unable to read the summary from blob storage.", e);
-        }
-    }
 }
-

@@ -1,6 +1,5 @@
 package com.beno.summaryspherebackend.services.impl;
 
-import com.azure.storage.blob.BlobContainerClient;
 import com.beno.summaryspherebackend.ModelMappers.ConvertToDto;
 import com.beno.summaryspherebackend.entities.User;
 import com.beno.summaryspherebackend.repositories.DocumentRepository;
@@ -17,12 +16,12 @@ class AgentToolsOwnershipTest {
     @Test
     void guessedIdsNeverReadBlobOrTriggerSummaries() {
         DocumentRepository documents = mock(DocumentRepository.class);
-        BlobContainerClient blobs = mock(BlobContainerClient.class);
+        ObjectStorageService storage = mock(ObjectStorageService.class);
         DocumentVectorService vectors = mock(DocumentVectorService.class);
         DocumentSummaryRepository summaryRepository = mock(DocumentSummaryRepository.class);
         DocumentSummaryService summaries = mock(DocumentSummaryService.class);
         DocumentService service = new DocumentServiceImpl(documents, mock(ConvertToDto.class),
-                mock(FileExtractionService.class), blobs, summaryRepository, vectors);
+                mock(FileExtractionService.class), storage, summaryRepository, vectors);
         AgentTools tools = new AgentTools(service, summaries, documents);
         ToolContext context = new ToolContext(Map.of("currentUser", User.builder().id("user").build()));
 
@@ -31,6 +30,6 @@ class AgentToolsOwnershipTest {
         assertEquals("Document not found with ID: other.pdf", tools.triggerSummarization("other.pdf", "concise", context));
         assertEquals("Document not found with ID: other.pdf", tools.generateQuiz("other.pdf", 3, context));
         verify(documents, times(4)).findByDocumentIdAndUploadedById("other.pdf", "user");
-        verifyNoInteractions(blobs, vectors, summaryRepository, summaries);
+        verifyNoInteractions(storage, vectors, summaryRepository, summaries);
     }
 }

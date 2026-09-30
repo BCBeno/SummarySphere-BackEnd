@@ -1,9 +1,5 @@
 package com.beno.summaryspherebackend.services.impl;
 
-import com.azure.storage.blob.BlobClient;
-import com.azure.storage.blob.BlobContainerClient;
-import com.azure.storage.blob.sas.BlobSasPermission;
-import com.azure.storage.blob.sas.BlobServiceSasSignatureValues;
 import com.beno.summaryspherebackend.ModelMappers.ConvertToDto;
 import com.beno.summaryspherebackend.dtos.DocumentListDTO;
 import com.beno.summaryspherebackend.entities.Document;
@@ -13,21 +9,19 @@ import com.beno.summaryspherebackend.repositories.DocumentSummaryRepository;
 import com.beno.summaryspherebackend.services.DocumentService;
 import com.beno.summaryspherebackend.services.DocumentVectorService;
 import com.beno.summaryspherebackend.services.FileExtractionService;
+import com.beno.summaryspherebackend.services.ObjectStorageService;
 import org.apache.tika.Tika;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.core.io.ByteArrayResource;
-import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.time.OffsetDateTime;
+import java.time.Duration;
 import java.util.*;
 
 @Service
@@ -35,45 +29,48 @@ public class DocumentServiceImpl implements DocumentService {
 
     private static final Logger log = LoggerFactory.getLogger(DocumentServiceImpl.class);
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(".pdf", ".docx", ".txt");
-    private static final Set<String> ALLOWED_MEDIA_TYPES = Set.of(
-            "application/pdf",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "text/plain"
+    private static final Map<String, String> MEDIA_TYPE_BY_EXTENSION = Map.of(
+            ".pdf", "application/pdf",
+            ".docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".txt", "text/plain"
     );
     private final Tika tika = new Tika();
     private final DocumentRepository documentRepository;
     private final ConvertToDto convertToDto;
     private final FileExtractionService fileExtractionService;
-    private final BlobContainerClient blobContainerClient;
+    private final ObjectStorageService objectStorageService;
     private final DocumentSummaryRepository documentSummaryRepository;
     private final DocumentVectorService documentVectorService;
 
     public DocumentServiceImpl(DocumentRepository documentRepository, ConvertToDto convertToDto,
-            FileExtractionService fileExtractionService, BlobContainerClient blobContainerClient,
+            FileExtractionService fileExtractionService, ObjectStorageService objectStorageService,
             DocumentSummaryRepository documentSummaryRepository,
             DocumentVectorService documentVectorService) {
         this.fileExtractionService = fileExtractionService;
         this.documentRepository = documentRepository;
         this.convertToDto = convertToDto;
-        this.blobContainerClient = blobContainerClient;
+        this.objectStorageService = objectStorageService;
         this.documentSummaryRepository = documentSummaryRepository;
         this.documentVectorService = documentVectorService;
     }
 
     @Override
     public String storeFile(MultipartFile file, String title, User uploader) throws IOException {
-        String originalFileName = Objects.requireNonNull(file.getOriginalFilename());
+        String originalFileName = file.getOriginalFilename();
+        if (originalFileName == null || originalFileName.isBlank() || file.isEmpty()) {
+            throw new IllegalArgumentException("A non-empty file with a filename is required");
+        }
         String docTitle = (title != null && !title.trim().isEmpty()) ? title : originalFileName;
         long fileSize = file.getSize();
 
-        if (fileSize > 25 * 1024 * 1024) {
-            throw new IllegalArgumentException("File size exceeds the maximum limit of 25MB");
+        if (fileSize > 20L * 1024 * 1024) {
+            throw new IllegalArgumentException("File size exceeds the maximum limit of 20MB");
         }
 
         int dotIndex = originalFileName.lastIndexOf('.');
         String fileExtension;
         if (dotIndex >= 0 && dotIndex < originalFileName.length() - 1) {
-            fileExtension = originalFileName.substring(dotIndex).toLowerCase();
+            fileExtension = originalFileName.substring(dotIndex).toLowerCase(Locale.ROOT);
         } else {
             throw new IllegalArgumentException("File must have an extension");
         }
@@ -82,9 +79,11 @@ public class DocumentServiceImpl implements DocumentService {
             throw new IllegalArgumentException("Invalid file type. Allowed types: txt, pdf, docx");
         }
 
+        String expectedMediaType = MEDIA_TYPE_BY_EXTENSION.get(fileExtension);
+        String detectedType;
         try (InputStream inputStream = file.getInputStream()) {
-            String detectedType = tika.detect(inputStream, originalFileName);
-            if (detectedType == null || !ALLOWED_MEDIA_TYPES.contains(detectedType.toLowerCase(Locale.ROOT))) {
+            detectedType = tika.detect(inputStream, originalFileName);
+            if (detectedType == null || !expectedMediaType.equalsIgnoreCase(detectedType)) {
                 throw new IllegalArgumentException("Unsupported or invalid file content");
             }
         }
@@ -95,12 +94,12 @@ public class DocumentServiceImpl implements DocumentService {
         try (InputStream extractionStream = file.getInputStream()) {
             content = fileExtractionService.extractText(extractionStream);
         } catch (Exception e) {
-            throw new IllegalArgumentException("Extraction failed: " + e.getMessage());
+            throw new IllegalArgumentException(
+                    "File could not be processed. Check that it is a valid PDF, DOCX, or TXT file.");
         }
 
-        BlobClient blobClient = blobContainerClient.getBlobClient(uniqueFileName);
         try (InputStream uploadStream = file.getInputStream()) {
-            blobClient.upload(uploadStream, fileSize, true);
+            objectStorageService.upload(uniqueFileName, uploadStream, fileSize, expectedMediaType);
         }
 
         String contentBlobName = buildContentBlobName(uniqueFileName);
@@ -153,25 +152,24 @@ public class DocumentServiceImpl implements DocumentService {
             log.warn("Failed to delete vector chunks for document {}", id, e);
         }
 
-        // delete main blob
-        BlobClient blobClient = blobContainerClient.getBlobClient(id);
-        blobClient.deleteIfExists();
+        // delete original file object
+        objectStorageService.delete(id);
 
-        // delete extracted content blob
+        // delete extracted text object
         if (document.getContentBlobName() != null && !document.getContentBlobName().isBlank()) {
-            blobContainerClient.getBlobClient(document.getContentBlobName()).deleteIfExists();
+            objectStorageService.delete(document.getContentBlobName());
         }
 
-        // delete any summary blobs from Azure Storage
+        // delete generated summary objects
         try {
             var summaries = documentSummaryRepository.findAllByDocument(document);
             for (var summary : summaries) {
                 if (summary.getSummaryBlobName() != null && !summary.getSummaryBlobName().isBlank()) {
-                    blobContainerClient.getBlobClient(summary.getSummaryBlobName()).deleteIfExists();
+                    objectStorageService.delete(summary.getSummaryBlobName());
                 }
             }
         } catch (Exception ex) {
-            log.warn("Failed to delete summary blobs for document {}", id, ex);
+            log.warn("Failed to delete summary objects for document {}", id, ex);
         }
 
         // Delete the document. CascadeType.ALL on 'summaries' and 'chatMessages'
@@ -182,20 +180,10 @@ public class DocumentServiceImpl implements DocumentService {
     @Override
     public String createOwnedDownloadUrl(String id, String userId) {
         requireOwnedDocument(id, userId);
-        BlobClient blobClient = blobContainerClient.getBlobClient(id);
-
-        if (!blobClient.exists()) {
+        if (!objectStorageService.exists(id)) {
             throw new IllegalArgumentException("File not found with id" + id);
         }
-
-        BlobSasPermission permissions = new BlobSasPermission().setReadPermission(true);
-
-        OffsetDateTime expiryTime = OffsetDateTime.now().plusMinutes(10);
-
-        BlobServiceSasSignatureValues values = new BlobServiceSasSignatureValues(expiryTime, permissions)
-                .setStartTime(OffsetDateTime.now().minusMinutes(1));
-
-        return blobClient.getBlobUrl() + "?" + blobClient.generateSas(values);
+        return objectStorageService.createPresignedDownloadUrl(id, Duration.ofMinutes(5));
     }
 
     @Override
@@ -210,17 +198,16 @@ public class DocumentServiceImpl implements DocumentService {
                 log.warn("Failed to delete vector chunks for document {}", doc.getDocumentId(), e);
             }
 
-            BlobClient blobClient = blobContainerClient.getBlobClient(doc.getDocumentId());
-            blobClient.deleteIfExists();
+            objectStorageService.delete(doc.getDocumentId());
             if (doc.getContentBlobName() != null && !doc.getContentBlobName().isBlank()) {
-                blobContainerClient.getBlobClient(doc.getContentBlobName()).deleteIfExists();
+                objectStorageService.delete(doc.getContentBlobName());
             }
 
             try {
                 var summaries = documentSummaryRepository.findAllByDocument(doc);
                 for (var summary : summaries) {
                     if (summary.getSummaryBlobName() != null && !summary.getSummaryBlobName().isBlank()) {
-                        blobContainerClient.getBlobClient(summary.getSummaryBlobName()).deleteIfExists();
+                        objectStorageService.delete(summary.getSummaryBlobName());
                     }
                 }
             } catch (Exception ex) {
@@ -243,10 +230,9 @@ public class DocumentServiceImpl implements DocumentService {
     }
 
     private void uploadTextBlob(String blobName, String content) throws IOException {
-        BlobClient blobClient = blobContainerClient.getBlobClient(blobName);
         byte[] contentBytes = content.getBytes(StandardCharsets.UTF_8);
         try (ByteArrayInputStream dataStream = new ByteArrayInputStream(contentBytes)) {
-            blobClient.upload(dataStream, contentBytes.length, true);
+            objectStorageService.upload(blobName, dataStream, contentBytes.length, "text/plain; charset=utf-8");
         }
     }
 
@@ -256,17 +242,11 @@ public class DocumentServiceImpl implements DocumentService {
         }
 
         if (document.getContentBlobName() != null && !document.getContentBlobName().isBlank()) {
-            BlobClient blobClient = blobContainerClient.getBlobClient(document.getContentBlobName());
-            if (!blobClient.exists()) {
+            if (!objectStorageService.exists(document.getContentBlobName())) {
                 return document;
             }
-
-            try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
-                blobClient.downloadStream(outputStream);
-                document.setContent(outputStream.toString(StandardCharsets.UTF_8));
-            } catch (IOException e) {
-                throw new IllegalStateException("Unable to read the document content from blob storage.", e);
-            }
+            document.setContent(new String(objectStorageService.download(document.getContentBlobName()),
+                    StandardCharsets.UTF_8));
         }
 
         return document;

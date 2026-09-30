@@ -1,6 +1,6 @@
 # SummarySphere (AI Course Summarizer - Backend)
 
-A Spring Boot-based microservice for AI-powered course summarization. It allows students to upload documents (PDF, Word, or Text), parses their content using Apache Tika, persists them in Azure Blob Storage, and generates summaries using Google's Gemini AI via Spring AI.
+A Spring Boot-based microservice for AI-powered course summarization. It allows students to upload documents (PDF, Word, or Text), parses their content using Apache Tika, persists them in S3-compatible object storage, and generates summaries using Google's Gemini AI via Spring AI.
 
 The application also features an interactive document-specific chat (Retrieval-Augmented Generation / RAG) utilizing pgvector as a vector store, as well as a general AI chat assistant.
 
@@ -29,7 +29,7 @@ The application also features an interactive document-specific chat (Retrieval-A
 
 * **File Parsing & Content Extraction:** Extracts text from PDF, Word (DOCX), and Text (TXT) files automatically using **Apache Tika**.
 * **Dual AI Storage & Processing:**
-  * Original documents and generated summary text files are securely persisted in **Azure Blob Storage**.
+  * Original documents and generated summary text files are securely persisted in **S3-compatible storage**.
   * Documents are split, vectorized, and stored in a **PostgreSQL** database using the **pgvector** extension.
 * **AI Summarization:** Supports customizable summarization types leveraging Spring AI to prompt the Gemini model.
 * **Document Chat (RAG):** Allows students to have interactive, contextual conversations with a specific document using semantic search (cosine distance) on pgvector.
@@ -37,7 +37,7 @@ The application also features an interactive document-specific chat (Retrieval-A
 * **JWT Authentication:** Secure stateless session management and role-based route protection.
 * **Password Reset & Verification:** Secure password recovery flows with tokens sent via **Gmail SMTP** or **Resend API**.
 * **Auto-Schema Initialization:** Seamlessly initializes vector store schemas and database tables on startup.
-* **Account Clean-Up:** Supports clean deletion of user accounts, which automatically purges all their files from Azure Blob Storage and clean-cascades database records.
+* **Account Clean-Up:** Supports clean deletion of user accounts, which automatically purges all their files from S3-compatible storage and clean-cascades database records.
 
 ---
 
@@ -49,11 +49,15 @@ The application also features an interactive document-specific chat (Retrieval-A
 * **AI Framework:** Spring AI (OpenAI for OpenRouter model calls, Google GenAI for Embeddings)
 * **Vector Store:** pgvector (PostgreSQL Vector Extension)
 * **Database:** PostgreSQL (with Hibernate JPA)
-* **Cloud Storage:** Azure Blob Storage (Azure SDK)
+* **Object Storage:** S3-compatible storage (AWS SDK for Java 2.x; tested with RustFS)
 * **Text Extraction:** Apache Tika (tika-core, tika-parsers-standard)
 * **Authentication:** Spring Security & JJWT (JSON Web Token)
 * **Email & Notifications:** Spring Boot Starter Mail & Resend Java SDK
 * **API Documentation:** SpringDoc OpenAPI (Swagger UI)
+
+### Object Storage Security
+
+For a production bucket, keep public access disabled, enable server-side encryption, and require HTTPS to the storage endpoint. Use a dedicated storage credential with access only to this application's bucket; do not reuse an administrator or root credential. These bucket and credential permissions are configured with the storage provider and are not enforced by the application code.
 
 ---
 
@@ -67,7 +71,7 @@ If you want to run this backend project locally, follow these steps:
 * Docker and Docker Compose installed
 * A Google Gemini API Key
 * A OpenRouter API Key (or OpenAI key)
-* Azure Storage Account (or local emulator)
+* An S3-compatible object storage endpoint and bucket
 
 ### 1. Clone the repository
 ```bash
@@ -87,15 +91,18 @@ GOOGLE_API_KEY=your_google_gemini_api_key
 OPENROUTER_API_KEY=your_openrouter_api_key
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 OPENROUTER_CHAT_MODEL=google/gemini-2.0-flash-exp:free
-AZURE_STORAGE_CONNECTION_STRING=your_azure_storage_connection_string
-AZURE_STORAGE_CONTAINER_NAME=your_azure_storage_container_name
+S3_ENDPOINT=https://s3.example.com
+S3_ACCESS_KEY=your_s3_access_key
+S3_SECRET_KEY=your_s3_secret_key
+S3_BUCKET=summarysphere
+S3_REGION=us-east-1
 MAIL_EMAIL=your_gmail_address@gmail.com
 MAIL_PASS=your_gmail_app_password
 RESEND_API_KEY=your_resend_api_key
 ```
 
-### 3. Start Database and Azurite (Docker)
-Run the docker compose file in the root folder to start PostgreSQL (with pgvector) and Azurite (Azure Storage Emulator):
+### 3. Start the Database (Docker)
+Run the docker compose file in the root folder to start PostgreSQL (with pgvector):
 ```bash
 docker compose up -d
 ```
@@ -139,7 +146,7 @@ Once the backend is running, the interactive Swagger UI is available at:
   * `DELETE /api/agent/chat` - Reset conversational chat
 * **Users (`/api/users/**`):**
   * `GET /api/users/me/documents` - List documents uploaded by current user
-  * `DELETE /api/users/me` - Delete user account and delete all associated files in Azure and database records
+  * `DELETE /api/users/me` - Delete user account and delete all associated files in object storage and database records
 
 ---
 

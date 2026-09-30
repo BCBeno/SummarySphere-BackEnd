@@ -1,10 +1,9 @@
 package com.beno.summaryspherebackend.services.impl;
 
-import com.azure.storage.blob.BlobClient;
-import com.azure.storage.blob.BlobContainerClient;
 import com.beno.summaryspherebackend.entities.Document;
 import com.beno.summaryspherebackend.services.AIService;
 import com.beno.summaryspherebackend.services.DocumentService;
+import com.beno.summaryspherebackend.services.ObjectStorageService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -37,18 +36,18 @@ public class AIServiceImpl implements AIService {
     private final ChatClient chatClient;
     private final SummaryProcessingStateService stateService;
     private final DocumentService documentService;
-    private final BlobContainerClient blobContainerClient;
+    private final ObjectStorageService objectStorageService;
 
     public AIServiceImpl(
             ChatClient.Builder builder,
             SummaryProcessingStateService stateService,
             DocumentService documentService,
-            BlobContainerClient blobContainerClient
+            ObjectStorageService objectStorageService
     ) {
         this.chatClient = builder.build();
         this.stateService = stateService;
         this.documentService = documentService;
-        this.blobContainerClient = blobContainerClient;
+        this.objectStorageService = objectStorageService;
     }
 
     @Override
@@ -100,12 +99,11 @@ public class AIServiceImpl implements AIService {
     }
 
     private void uploadSummaryText(String blobName, String summaryText) {
-        BlobClient blobClient = blobContainerClient.getBlobClient(blobName);
         byte[] summaryBytes = summaryText.getBytes(StandardCharsets.UTF_8);
         try (ByteArrayInputStream dataStream = new ByteArrayInputStream(summaryBytes)) {
-            blobClient.upload(dataStream, summaryBytes.length, true);
+            objectStorageService.upload(blobName, dataStream, summaryBytes.length, "text/plain; charset=utf-8");
         } catch (Exception ex) {
-            throw new IllegalStateException("Unable to store the generated summary in blob storage.", ex);
+            throw new IllegalStateException("Unable to store the generated summary in object storage.", ex);
         }
     }
 }

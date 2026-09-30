@@ -5,14 +5,12 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import com.beno.summaryspherebackend.services.JwtService;
 import org.springframework.mail.javamail.JavaMailSender;
-import com.azure.storage.blob.BlobServiceClient;
-import com.azure.storage.blob.BlobContainerClient;
 import org.springframework.ai.chat.client.ChatClient;
 import com.beno.summaryspherebackend.services.DocumentVectorService;
+import com.beno.summaryspherebackend.services.ObjectStorageService;
 import org.springframework.ai.vectorstore.VectorStore;
 
 import static org.mockito.Mockito.*;
-import org.mockito.ArgumentMatchers;
 
 @Configuration
 public class TestConfig {
@@ -33,23 +31,8 @@ public class TestConfig {
 
     @Bean
     @Primary
-    public BlobServiceClient testBlobServiceClient() {
-        // Mock the Azure BlobServiceClient used by AzureBlobConfig so tests don't need a real connection string
-        BlobServiceClient client = mock(BlobServiceClient.class);
-        BlobContainerClient container = mock(BlobContainerClient.class);
-        // ensure getBlobContainerClient returns our mock container and exists() returns true to skip creation
-        when(client.getBlobContainerClient(ArgumentMatchers.anyString())).thenReturn(container);
-        when(container.exists()).thenReturn(true);
-        return client;
-    }
-
-    @Bean
-    @Primary
-    public BlobContainerClient testBlobContainerClient() {
-        // Provide the same mocked container client used by the BlobServiceClient
-        BlobContainerClient container = mock(BlobContainerClient.class);
-        when(container.exists()).thenReturn(true);
-        return container;
+    public ObjectStorageService testObjectStorageService() {
+        return mock(ObjectStorageService.class);
     }
 
     @Bean

@@ -1,6 +1,5 @@
 package com.beno.summaryspherebackend.services.impl;
 
-import com.azure.storage.blob.BlobContainerClient;
 import com.beno.summaryspherebackend.entities.Document;
 import com.beno.summaryspherebackend.entities.DocumentSummary;
 import com.beno.summaryspherebackend.entities.User;
@@ -9,6 +8,7 @@ import com.beno.summaryspherebackend.events.SummaryRequestedEvent;
 import com.beno.summaryspherebackend.repositories.DocumentRepository;
 import com.beno.summaryspherebackend.repositories.DocumentSummaryRepository;
 import com.beno.summaryspherebackend.services.RateLimitService;
+import com.beno.summaryspherebackend.services.ObjectStorageService;
 import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,7 +33,7 @@ class DocumentSummaryServiceImplTest {
     @Mock
     DocumentRepository documentRepository;
     @Mock
-    BlobContainerClient blobContainerClient;
+    ObjectStorageService objectStorageService;
     @Mock
     RateLimitService rateLimitService;
     @Mock
@@ -132,5 +132,5 @@ class DocumentSummaryServiceImplTest {
                 () -> documentSummaryService.getLatestSummaryForDocumentByType("other", "concise", "user"));
         org.junit.jupiter.api.Assertions.assertThrows(jakarta.persistence.EntityNotFoundException.class,
                 () -> documentSummaryService.getSummariesForDocument("other", "user"));
-        verifyNoInteractions(blobContainerClient, documentSummaryRepository, rateLimitService, eventPublisher);
+        verifyNoInteractions(objectStorageService, documentSummaryRepository, rateLimitService, eventPublisher);
     }}

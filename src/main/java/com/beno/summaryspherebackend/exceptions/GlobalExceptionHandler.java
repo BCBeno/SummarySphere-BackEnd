@@ -36,6 +36,14 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage());
     }
 
+    @ExceptionHandler(ObjectStorageException.class)
+    public ResponseEntity<Map<String, Object>> handleObjectStorage(ObjectStorageException ex) {
+        String errorId = UUID.randomUUID().toString();
+        log.error("Object storage request failed. errorId={}", errorId, ex);
+        return buildResponse(HttpStatus.SERVICE_UNAVAILABLE,
+                "Object storage is temporarily unavailable. Reference: " + errorId);
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, String>> handleValidation(MethodArgumentNotValidException ex) {
         var error = ex.getBindingResult().getFieldError();

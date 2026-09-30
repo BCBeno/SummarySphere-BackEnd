@@ -39,7 +39,6 @@ public class DocumentController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "title", required = false) String title,
             @AuthenticationPrincipal User currentUser) {
-        String originalFileName = Objects.requireNonNull(file.getOriginalFilename());
         try {
             String id = documentService.storeFile(file, title, currentUser);
 
@@ -51,7 +50,7 @@ public class DocumentController {
             return ResponseEntity.badRequest().body("There was an error uploading the file: " + ex.getMessage());
         } catch (IOException ex) {
             return ResponseEntity.internalServerError()
-                    .body("Could not store file " + originalFileName + ". Please try again!");
+                    .body("Could not store the uploaded file. Please try again!");
         }
     }
 
@@ -85,9 +84,9 @@ public class DocumentController {
     @GetMapping("/{id}/download-link")
     public ResponseEntity<?> getDownloadLink(@PathVariable String id, @AuthenticationPrincipal User currentUser) {
 
-        String sasUrl = documentService.createOwnedDownloadUrl(id, currentUser.getId());
+        String downloadUrl = documentService.createOwnedDownloadUrl(id, currentUser.getId());
         Map<String, String> response = new HashMap<>();
-        response.put("downloadUrl", sasUrl);
+        response.put("downloadUrl", downloadUrl);
 
         return ResponseEntity.ok(response);
     }

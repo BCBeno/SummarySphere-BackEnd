@@ -1,13 +1,12 @@
 package com.beno.summaryspherebackend.services.impl;
 
-import com.azure.storage.blob.BlobClient;
-import com.azure.storage.blob.BlobContainerClient;
 import com.beno.summaryspherebackend.ModelMappers.ConvertToDto;
 import com.beno.summaryspherebackend.entities.Document;
 import com.beno.summaryspherebackend.entities.User;
 import com.beno.summaryspherebackend.enums.Role;
 import com.beno.summaryspherebackend.repositories.DocumentRepository;
 import com.beno.summaryspherebackend.services.FileExtractionService;
+import com.beno.summaryspherebackend.services.ObjectStorageService;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,7 +34,7 @@ class DocumentServiceImplTest {
     com.beno.summaryspherebackend.repositories.DocumentSummaryRepository documentSummaryRepository;
 
     @Mock
-    BlobContainerClient blobContainerClient;
+    ObjectStorageService objectStorageService;
 
     @Mock
     ConvertToDto convertToDto;
@@ -51,7 +50,7 @@ class DocumentServiceImplTest {
 
 
     @Test
-    void storeFileInBlobStorage_success() throws Exception {
+    void storeFileInObjectStorage_success() throws Exception {
         // Arrange
         MultipartFile file = mock(MultipartFile.class);
         byte[] contentBytes = "hello world".getBytes();
@@ -61,11 +60,6 @@ class DocumentServiceImplTest {
         when(file.getSize()).thenReturn((long) contentBytes.length);
 
         when(fileExtractionService.extractText(any(InputStream.class))).thenReturn("extracted text");
-
-        BlobClient blobClient = mock(BlobClient.class);
-        when(blobContainerClient.getBlobClient(anyString())).thenReturn(blobClient);
-        // simulate successful upload
-        doNothing().when(blobClient).upload(any(InputStream.class), anyLong(), anyBoolean());
 
         when(documentRepository.save(any(Document.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -87,8 +81,8 @@ class DocumentServiceImplTest {
         assertEquals("test.pdf", saved.getOriginalFilename());
         assertEquals((long) contentBytes.length, saved.getSize());
         assertEquals(uploader, saved.getUploadedBy());
-        verify(blobContainerClient, times(2)).getBlobClient(anyString());
-        verify(blobClient, times(2)).upload(any(InputStream.class), anyLong(), anyBoolean());
+        verify(objectStorageService, times(2)).upload(anyString(), any(InputStream.class), anyLong(),
+                org.mockito.ArgumentMatchers.nullable(String.class));
     }
 
     @Test
@@ -126,37 +120,33 @@ class DocumentServiceImplTest {
     }
 
     @Test
-    void generateDownloadLink_whenBlobExists_returnsLink() {
+    void generateDownloadLink_whenObjectExists_returnsLink() {
         // Arrange
         String id = "file-id.pdf";
         when(documentRepository.findByDocumentIdAndUploadedById(id, "user")).thenReturn(Optional.of(new Document()));
-        BlobClient blobClient = mock(BlobClient.class);
-        when(blobContainerClient.getBlobClient(id)).thenReturn(blobClient);
-        when(blobClient.exists()).thenReturn(true);
-        when(blobClient.getBlobUrl()).thenReturn("http://storage.example.com/container/" + id);
-        when(blobClient.generateSas(any())).thenReturn("sastoken123");
+        when(objectStorageService.exists(id)).thenReturn(true);
+        when(objectStorageService.createPresignedDownloadUrl(eq(id), any()))
+                .thenReturn("https://storage.example.com/test-bucket/" + id + "?X-Amz-Signature=signed");
 
         // Act
         String link = documentService.createOwnedDownloadUrl(id, "user");
 
         // Assert
-        assertEquals("http://storage.example.com/container/" + id + "?sastoken123", link);
-        verify(blobClient, times(1)).exists();
-        verify(blobClient, times(1)).generateSas(any());
+        assertEquals("https://storage.example.com/test-bucket/" + id + "?X-Amz-Signature=signed", link);
+        verify(objectStorageService).exists(id);
+        verify(objectStorageService).createPresignedDownloadUrl(eq(id), eq(java.time.Duration.ofMinutes(5)));
     }
 
     @Test
-    void generateDownloadLink_whenBlobMissing_throws() {
+    void generateDownloadLink_whenObjectMissing_throws() {
         // Arrange
         String id = "missing-file.pdf";
         when(documentRepository.findByDocumentIdAndUploadedById(id, "user")).thenReturn(Optional.of(new Document()));
-        BlobClient blobClient = mock(BlobClient.class);
-        when(blobContainerClient.getBlobClient(id)).thenReturn(blobClient);
-        when(blobClient.exists()).thenReturn(false);
+        when(objectStorageService.exists(id)).thenReturn(false);
 
         assertThrows(IllegalArgumentException.class, () -> documentService.createOwnedDownloadUrl(id, "user"));
-        verify(blobClient, times(1)).exists();
-        verify(blobClient, times(0)).generateSas(any());
+        verify(objectStorageService).exists(id);
+        verify(objectStorageService, never()).createPresignedDownloadUrl(anyString(), any());
     }
 
     @Test
@@ -170,21 +160,17 @@ class DocumentServiceImplTest {
     }
 
     @Test
-    void deleteFile_whenFound_deletesBlobAndRepository() {
+    void deleteFile_whenFound_deletesObjectAndRepository() {
         // Arrange
         String id = "present-id";
         Document doc = new Document(id, "title", "orig.pdf", 123L, ".pdf", "content", null);
         when(documentRepository.findByDocumentIdAndUploadedById(id, "user")).thenReturn(Optional.of(doc));
         when(documentSummaryRepository.findAllByDocument(doc)).thenReturn(java.util.Collections.emptyList());
-        BlobClient blobClient = mock(BlobClient.class);
-        when(blobContainerClient.getBlobClient(id)).thenReturn(blobClient);
-        when(blobClient.deleteIfExists()).thenReturn(true);
-
         // Act
         documentService.deleteOwnedDocument(id, "user");
 
         // Assert
-        verify(blobClient, times(1)).deleteIfExists();
+        verify(objectStorageService).delete(id);
         verify(documentRepository, times(1)).delete(doc);
     }
     @Test
@@ -195,7 +181,7 @@ class DocumentServiceImplTest {
                 () -> documentService.createOwnedDownloadUrl("other.pdf", "user"));
         assertThrows(jakarta.persistence.EntityNotFoundException.class,
                 () -> documentService.deleteOwnedDocument("other.pdf", "user"));
-        verifyNoInteractions(blobContainerClient, documentVectorService, documentSummaryRepository);
+        verifyNoInteractions(objectStorageService, documentVectorService, documentSummaryRepository);
         verify(documentRepository, never()).findById(anyString());
         verify(documentRepository, never()).delete(any());
     }
@@ -204,18 +190,12 @@ class DocumentServiceImplTest {
     void ownedContentIsHydratedAfterOwnerQuery() {
         Document doc = new Document();
         doc.setContentBlobName("content.txt");
-        BlobClient blob = mock(BlobClient.class);
         when(documentRepository.findByDocumentIdAndUploadedById("doc.pdf", "user")).thenReturn(Optional.of(doc));
-        when(blobContainerClient.getBlobClient("content.txt")).thenReturn(blob);
-        when(blob.exists()).thenReturn(true);
-        doAnswer(invocation -> {
-            ((java.io.OutputStream) invocation.getArgument(0)).write("content".getBytes());
-            return null;
-        }).when(blob).downloadStream(any(java.io.OutputStream.class));
+        when(objectStorageService.exists("content.txt")).thenReturn(true);
+        when(objectStorageService.download("content.txt")).thenReturn("content".getBytes());
         assertEquals("content", documentService.getOwnedDocument("doc.pdf", "user").getContent());
-        var order = inOrder(documentRepository, blobContainerClient, blob);
+        var order = inOrder(documentRepository, objectStorageService);
         order.verify(documentRepository).findByDocumentIdAndUploadedById("doc.pdf", "user");
-        order.verify(blobContainerClient).getBlobClient("content.txt");
-        order.verify(blob).exists();
-        order.verify(blob).downloadStream(any(java.io.OutputStream.class));
+        order.verify(objectStorageService).exists("content.txt");
+        order.verify(objectStorageService).download("content.txt");
     }}
