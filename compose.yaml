@@ -5,49 +5,33 @@ services:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
-      POSTGRES_DB: postgres
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/bcbeno/summarysphere-backend:latest
     restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      DB_URL: jdbc:postgresql://db:5432/postgres
-      DB_USERNAME: postgres
-      DB_PASSWORD: postgres
-      FRONTEND_BASE_URL: http://localhost:5173
-      SPRING_DOCKER_COMPOSE_ENABLED: "false"
     ports:
-      - "8080:8080"
+      - "192.168.0.24:8080:8080"
+    env_file:
+      - ../.env
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB}
+      DB_USERNAME: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL}
+      SPRING_DOCKER_COMPOSE_ENABLED: "false"
     depends_on:
       db:
         condition: service_healthy
-
-  frontend:
-    build:
-      context: ../../Assist/SummarySphere-Frontend
-      dockerfile: Dockerfile
-    environment:
-      BACKEND_URL: http://localhost:8080
-    restart: unless-stopped
-    ports:
-      - "5173:80"
-    depends_on:
-      - backend
 
 volumes:
   pgdata:

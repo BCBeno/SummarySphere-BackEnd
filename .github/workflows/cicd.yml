@@ -95,4 +95,4 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GHCR_USERNAME: ${{ github.actor }}
         run: |
-          printf '%s' "$GHCR_TOKEN" | ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$DEPLOY_HOST" "set -eu; git -C /opt/summarysphere/backend pull --ff-only origin main; trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT; docker login ghcr.io --username '$GHCR_USERNAME' --password-stdin; cd /opt/summarysphere; docker compose --env-file .env -f backend/deploy/compose.production.yaml pull backend; docker compose --env-file .env -f backend/deploy/compose.production.yaml up -d backend"
+          printf '%s' "$GHCR_TOKEN" | ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$DEPLOY_HOST" "set -eu; git -C /opt/summarysphere/backend pull --ff-only origin main; trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT; docker login ghcr.io --username '$GHCR_USERNAME' --password-stdin; cd /opt/summarysphere; docker compose --env-file .env -f backend/compose.yaml pull backend; docker compose --env-file .env -f backend/compose.yaml up -d backend"
